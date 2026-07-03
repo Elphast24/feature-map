@@ -9,7 +9,9 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCommand:sbatlas.helloWorld"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
