@@ -6,10 +6,15 @@ import * as vscode from 'vscode';
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 
+	// Just trying out some states
+	const lastFile = context.workspaceState.get<String>('lastEditedFile', 'None');
+	const lastLine = context.workspaceState.get<number>('lastLinePosition',0 );
+	const lastChar = context.workspaceState.get<number>('lastCharPosition',0 );
+	
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
 	console.log('Congratulations, your extension "sbatlas" is now active!');
-
+	
 	// The command has been defined in the package.json file
 	// Now provide the implementation of the command with registerCommand
 	// The commandId parameter must match the command field in package.json
@@ -17,9 +22,27 @@ export function activate(context: vscode.ExtensionContext) {
 		// The code you place here will be executed every time your command is executed
 		// Display a message box to the user
 		vscode.window.showInformationMessage('Hello World from SBAtlas!, prepare for a new adventure!');
+		vscode.window.showInformationMessage(
+			`Last Update Session[ File:${lastFile} Line:${lastLine} Char:${lastChar} ]`
+		);
 	});
+	
+	
+		const selectionDisposable = vscode.window.onDidChangeTextEditorSelection((event) => {
+			const editor = event.textEditor;
+	
+			if(!editor) {return;}
+	
+			const document = editor.document;
+			const position = event.selections[0].active;
+	
+			context.workspaceState.update('lastEditedFile', document.fileName);
+			context.workspaceState.update('lastLinePosition', position.line + 1);
+			context.workspaceState.update('lastCharPosition', position.character + 1);
+		});
 
-	context.subscriptions.push(disposable);
+
+	context.subscriptions.push(disposable, selectionDisposable);
 }
 
 // This method is called when your extension is deactivated
