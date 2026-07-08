@@ -1,14 +1,33 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
-import {WorkspaceStorage} from './services/workspaceStorage';
+import { WorkspaceStorage } from "./services/storage/workspaceStorage";
+import { ProjectService } from "./services/project/projectService";
+
+// projectService is module-level so commands can import it later.
+// In Milestone 5, commands will receive this via a shared context
+// rather than a module import — but this is fine for now.
+export let projectService: ProjectService;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 
-	// Initializing the workspace storage
-	const storage = new WorkspaceStorage(context.workspaceState);
+	// Build the storage layer
+  const storage = new WorkspaceStorage(context.workspaceState);
+
+  // Build the service layer on top of storage
+  projectService = new ProjectService(storage);
+
+  // Load any previously saved project into memory immediately.
+  // After this, everything reads from projectService.getProject().
+  const result = await projectService.loadProject();
+
+  if (result.ok && result.data) {
+    console.log(`SBAtlas: loaded project "${result.data.name}"`);
+  } else {
+    console.log("SBAtlas: no existing project found.");
+  }
 
 	// Just trying out some states
 	const lastFile = context.workspaceState.get<String>('lastEditedFile', 'None');
