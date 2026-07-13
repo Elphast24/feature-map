@@ -18,6 +18,31 @@
       {
         "command": "sbatlas.helloWorld",
         "title": "Hello World"
+      },
+       {
+        "command": "sbatlas.createProject",
+        "title": "Create Project",
+        "category": "SBAtlas"
+      },
+      {
+        "command": "sbatlas.deleteProject",
+        "title": "Delete Project",
+        "category": "SBAtlas"
+      },
+      {
+        "command": "sbatlas.pasteRequirement",
+        "title": "Add Requirement",
+        "category": "SBAtlas"
+      },
+      {
+        "command": "sbatlas.editRequirement",
+        "title": "Edit Requirement",
+        "category": "SBAtlas"
+      },
+      {
+        "command": "sbatlas.refresh",
+        "title": "Refresh",
+        "category": "SBAtlas"
       }
     ]
   },
