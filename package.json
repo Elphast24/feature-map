@@ -44,7 +44,58 @@
         "title": "Refresh",
         "category": "SBAtlas"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sbatlas-sidebar",
+          "title": "SBAtlas",
+          "icon": "resources/icons/sbatlas.svg"
+        }
+      ]
+    },
+    "views": {
+      "sbatlas-sidebar": [
+        {
+          "id": "sbatlasProjectView",
+          "name": "Project",
+          "icon": "resources/icons/sbatlas.svg",
+          "contextualTitle": "SBAtlas"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "sbatlas.createProject",
+          "when": "view == sbatlasProjectView",
+          "group": "navigation"
+        },
+        {
+          "command": "sbatlas.refresh",
+          "when": "view == sbatlasProjectView",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sbatlas.pasteRequirement",
+          "when": "view == sbatlasProjectView && viewItem == requirementsSection",
+          "group": "inline"
+        },
+        {
+          "command": "sbatlas.editRequirement",
+          "when": "view == sbatlasProjectView && viewItem == requirementItem",
+          "group": "inline"
+        },
+        {
+          "command": "sbatlas.deleteProject",
+          "when": "view == sbatlasProjectView && viewItem == projectRoot",
+          "group": "inline"
+        }
+      ]
+    }
+
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

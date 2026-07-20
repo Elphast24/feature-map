@@ -1,4 +1,3 @@
-
 import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
 import { createProjectCommand } from "./createProject";
@@ -11,7 +10,7 @@ export function registerCommands(
   context: vscode.ExtensionContext,
   service: ProjectService
 ): void {
-  const commands: [string, () => Promise<void>][] = [
+  const commands: [string, (...args: unknown[]) => Promise<void>][] = [
     [
       "sbatlas.createProject",
       () => createProjectCommand(service),
@@ -26,7 +25,9 @@ export function registerCommands(
     ],
     [
       "sbatlas.editRequirement",
-      () => editRequirementCommand(service),
+      // args[0] is the requirementId when called from tree context menu.
+      // It is undefined when called from the Command Palette.
+      (...args) => editRequirementCommand(service, args[0] as string | undefined),
     ],
     [
       "sbatlas.refresh",
@@ -36,12 +37,10 @@ export function registerCommands(
 
   for (const [id, handler] of commands) {
     context.subscriptions.push(
-      vscode.commands.registerCommand(id, async () => {
+      vscode.commands.registerCommand(id, async (...args) => {
         try {
-          await handler();
+          await handler(...args);
         } catch (error) {
-          // Catch unexpected errors so one crashing command does not
-          // take down the entire extension.
           vscode.window.showErrorMessage(
             `SBAtlas: An unexpected error occurred. ${
               error instanceof Error ? error.message : String(error)

@@ -1,9 +1,15 @@
-import { Project, ProjectStatus } from "../../models/project";
-import { Requirement, RequirementSource } from "../../models/requirement";
-import { StorageService } from "../storage/storageService";
-import { ValidationService } from "../validation/validationService";
+// src/services/project/ProjectService.ts
+
+import * as vscode from "vscode";
+import { Project, ProjectStatus } from "../../models/Project";
+import { Requirement, RequirementSource } from "../../models/Requirement";
+import { StorageService } from "../storage/StorageService";
+import { ValidationService } from "../validation/ValidationService";
 import { generateId } from "../../utils/generateId";
 
+// ─────────────────────────────────────────────────────────────────
+// Result type  (unchanged)
+// ─────────────────────────────────────────────────────────────────
 
 export type ServiceResult<T> =
   | { ok: true; data: T }
@@ -12,7 +18,10 @@ export type ServiceResult<T> =
 const ok = <T>(data: T): ServiceResult<T> => ({ ok: true, data });
 const fail = <T>(error: string): ServiceResult<T> => ({ ok: false, error });
 
-// Input types  (unchanged from Milestone 3)
+// ─────────────────────────────────────────────────────────────────
+// Input types  (unchanged)
+// ─────────────────────────────────────────────────────────────────
+
 export interface CreateProjectInput {
   name: string;
   description?: string;
@@ -24,16 +33,66 @@ export interface AddRequirementInput {
   source?: RequirementSource;
 }
 
+// ─────────────────────────────────────────────────────────────────
+// ProjectService
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * ProjectService — business logic layer.
+ *
+ * NEW IN THIS UPDATE:
+ * ProjectService now owns an EventEmitter that fires whenever
+ * project data changes. Any UI component (sidebar, status bar,
+ * future webview) subscribes to onDidChangeProject once and
+ * refreshes automatically.
+ *
+ * Commands never call sidebar.refresh() directly. They call
+ * the service. The service fires the event. The sidebar hears it.
+ * This is the Observer Pattern.
+ */
 export class ProjectService {
   private storage: StorageService;
   private validator: ValidationService;
   private currentProject: Project | null = null;
 
+  // ── Event system ───────────────────────────────────────────────
+  /**
+   * Private emitter — only ProjectService fires this.
+   *
+   * Why vscode.EventEmitter?
+   * VS Code provides a battle-tested EventEmitter that integrates
+   * with the extension lifecycle (disposable). Using Node's built-in
+   * EventEmitter would work but would not be automatically cleaned up
+   * when the extension deactivates, risking memory leaks.
+   */
+  private readonly _onDidChangeProject =
+    new vscode.EventEmitter<Project | null>();
+
+  /**
+   * Public event — subscribers listen here.
+   *
+   * Usage:
+   *   projectService.onDidChangeProject(() => {
+   *     sidebar.refresh();
+   *   });
+   *
+   * The emitter sends the current project (or null if deleted)
+   * so subscribers can react intelligently without calling
+   * getProject() separately.
+   */
+  readonly onDidChangeProject = this._onDidChangeProject.event;
+
   constructor(storage: StorageService, validator?: ValidationService) {
     this.storage = storage;
-    // Default to a standard ValidationService if none is injected.
-    // Injecting one allows tests to swap in a custom validator.
     this.validator = validator ?? new ValidationService();
+  }
+
+  /**
+   * Disposes the event emitter.
+   * Call this when the extension deactivates to prevent memory leaks.
+   */
+  dispose(): void {
+    this._onDidChangeProject.dispose();
   }
 
   // ─────────────────────────────────────────
@@ -43,7 +102,6 @@ export class ProjectService {
   async createProject(
     input: CreateProjectInput
   ): Promise<ServiceResult<Project>> {
-    // Delegate all validation to ValidationService
     const validation = this.validator.validateCreateProject(input);
     if (!validation.isValid) {
       return fail(validation.summary);
@@ -68,12 +126,19 @@ export class ProjectService {
     await this.storage.saveProject(project);
     this.currentProject = project;
 
+    // ← Fire the event so all subscribers know about the new project
+    this._onDidChangeProject.fire(this.currentProject);
+
     return ok(project);
   }
 
   async loadProject(): Promise<ServiceResult<Project | null>> {
     const project = await this.storage.loadProject();
     this.currentProject = project;
+
+    // ← Fire so the sidebar renders whatever was loaded (or null)
+    this._onDidChangeProject.fire(this.currentProject);
+
     return ok(project);
   }
 
@@ -85,6 +150,9 @@ export class ProjectService {
     await this.storage.deleteProject();
     this.currentProject = null;
 
+    // ← Fire with null so the sidebar shows the empty state
+    this._onDidChangeProject.fire(null);
+
     return ok(undefined);
   }
 
@@ -94,6 +162,10 @@ export class ProjectService {
     }
 
     await this.storage.saveProject(this.currentProject);
+
+    // No event fire here — saveProject does not change data,
+    // it persists existing data. The UI is already up to date.
+
     return ok(undefined);
   }
 
@@ -122,6 +194,7 @@ export class ProjectService {
     this.currentProject.metadata.touch();
 
     await this.persistIfAutoSave();
+    this._onDidChangeProject.fire(this.currentProject);
 
     return ok(this.currentProject);
   }
@@ -143,6 +216,7 @@ export class ProjectService {
     this.currentProject.metadata.touch();
 
     await this.persistIfAutoSave();
+    this._onDidChangeProject.fire(this.currentProject);
 
     return ok(this.currentProject);
   }
@@ -157,6 +231,7 @@ export class ProjectService {
     this.currentProject.updateStatus(status);
 
     await this.persistIfAutoSave();
+    this._onDidChangeProject.fire(this.currentProject);
 
     return ok(this.currentProject);
   }
@@ -193,6 +268,7 @@ export class ProjectService {
     this.currentProject.addRequirement(requirement);
 
     await this.persistIfAutoSave();
+    this._onDidChangeProject.fire(this.currentProject);
 
     return ok(requirement);
   }
@@ -205,7 +281,6 @@ export class ProjectService {
       return fail("No project is loaded.");
     }
 
-    // Validate the ID first
     const idValidation = this.validator.validateId(
       requirementId,
       "Requirement"
@@ -220,7 +295,6 @@ export class ProjectService {
       return fail(`Requirement "${requirementId}" not found.`);
     }
 
-    // Validate the new content (excluding this requirement from duplicate check)
     const validation = this.validator.validateEditRequirement(
       requirementId,
       newContent,
@@ -234,6 +308,7 @@ export class ProjectService {
     this.currentProject.metadata.touch();
 
     await this.persistIfAutoSave();
+    this._onDidChangeProject.fire(this.currentProject);
 
     return ok(requirement);
   }
@@ -260,6 +335,7 @@ export class ProjectService {
     }
 
     await this.persistIfAutoSave();
+    this._onDidChangeProject.fire(this.currentProject);
 
     return ok(undefined);
   }
