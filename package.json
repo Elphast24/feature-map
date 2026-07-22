@@ -14,6 +14,29 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "SBAtlas",
+      "properties": {
+        "sbatlas.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Your OpenAI API key for roadmap generation. Get one at https://platform.openai.com/api-keys",
+          "order": 1
+        },
+        "sbatlas.openaiModel": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "markdownDescription": "The OpenAI model to use. `gpt-4o-mini` is recommended for cost efficiency.",
+          "order": 2
+        },
+        "sbatlas.maxTokens": {
+          "type": "number",
+          "default": 4096,
+          "markdownDescription": "Maximum tokens in the AI response. Increase for projects with many requirements.",
+          "order": 3
+        }
+      }
+    },
     "commands": [
       {
         "command": "sbatlas.helloWorld",
@@ -95,7 +118,6 @@
         }
       ]
     }
-
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

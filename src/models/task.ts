@@ -13,7 +13,8 @@ export type TaskType =
   | "test"
   | "docs"
   | "config"
-  | "research";
+  | "research"
+  | "security";
 
 export interface ITask {
   id: string;
