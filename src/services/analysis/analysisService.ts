@@ -11,19 +11,37 @@ export interface AnalysisResult {
   tokensUsed: number;
 }
 
+export type AIConfigReader = () => {
+  apiKey: string | null;
+  model: string;
+  maxTokens: number;
+};
+
 export class AnalysisService {
   private readonly client: AIClient;
   private readonly promptBuilder: PromptBuilder;
   private readonly responseParser: ResponseParser;
+  private readonly getConfig: AIConfigReader;
 
   constructor(
     client?: AIClient,
     promptBuilder?: PromptBuilder,
-    responseParser?: ResponseParser
+    responseParser?: ResponseParser,
+    configReader?: AIConfigReader
   ) {
     this.client = client ?? new AIClient();
     this.promptBuilder = promptBuilder ?? new PromptBuilder();
     this.responseParser = responseParser ?? new ResponseParser();
+
+    // No default here — configReader MUST be provided in production.
+    // ExtensionLifecycle passes readAIConfig.
+    // If omitted, calls to analyse() will fail with a clear error
+    // at the "no API key" guard rather than crashing at import time.
+    this.getConfig = configReader ?? (() => ({
+      apiKey: null,
+      model: "gpt-4o-mini",
+      maxTokens: 4096,
+    }));
   }
 
   async analyse(
@@ -39,8 +57,8 @@ export class AnalysisService {
       };
     }
 
-    // ── Step 2: Read API key ──────────────────────────────────────
-    const apiKey = AIClient.getApiKey();
+    // ── Step 2: Read config ───────────────────────────────────────
+    const { apiKey, model, maxTokens } = this.getConfig();
 
     if (!apiKey) {
       return {
@@ -61,8 +79,8 @@ export class AnalysisService {
     try {
       aiResponse = await this.client.complete({
         apiKey,
-        model: AIClient.getModel(),
-        maxTokens: AIClient.getMaxTokens(),
+        model,
+        maxTokens,
         systemMessage,
         userMessage,
       });
@@ -70,7 +88,6 @@ export class AnalysisService {
       if (error instanceof AIClientError) {
         return { ok: false, error: error.message };
       }
-
       return {
         ok: false,
         error:
@@ -80,10 +97,10 @@ export class AnalysisService {
     }
 
     // ── Step 5: Parse the response ────────────────────────────────
-    let parsed: { roadmap: Roadmap; warnings: string[] };
+    let parsedResponse: { roadmap: Roadmap; warnings: string[] };
 
     try {
-      parsed = this.responseParser.parse(
+      parsedResponse = this.responseParser.parse(
         aiResponse.content,
         project.id
       );
@@ -101,8 +118,8 @@ export class AnalysisService {
     return {
       ok: true,
       data: {
-        roadmap: parsed.roadmap,
-        warnings: parsed.warnings,
+        roadmap: parsedResponse.roadmap,
+        warnings: parsedResponse.warnings,
         tokensUsed: aiResponse.tokensUsed,
       },
     };

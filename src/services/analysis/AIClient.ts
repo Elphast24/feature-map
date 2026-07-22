@@ -1,6 +1,10 @@
-import * as https from "https";
-import * as vscode from "vscode";
+// src/services/analysis/AIClient.ts
 
+import * as https from "https";
+
+/**
+ * Configuration for a single API call.
+ */
 export interface AIRequestConfig {
   apiKey: string;
   model: string;
@@ -9,7 +13,9 @@ export interface AIRequestConfig {
   userMessage: string;
 }
 
-
+/**
+ * The raw response we care about from the API.
+ */
 export interface AIResponse {
   content: string;
   tokensUsed: number;
@@ -27,39 +33,12 @@ export class AIClient {
         { role: "user", content: config.userMessage },
       ],
       max_tokens: config.maxTokens,
-      // JSON mode: OpenAI guarantees the response is valid JSON.
-      // The prompt must explicitly ask for JSON for this to work correctly.
       response_format: { type: "json_object" },
-      temperature: 0.2, // Low temperature for consistent, structured output
+      temperature: 0.2,
     });
 
     const rawResponse = await this.post(body, config.apiKey);
     return this.parseAPIResponse(rawResponse);
-  }
-
-
-  static getApiKey(): string | null {
-    const config = vscode.workspace.getConfiguration("sbatlas");
-    const key = config.get<string>("openaiApiKey");
-
-    if (!key || key.trim().length === 0) {
-      return null;
-    }
-
-    return key.trim();
-  }
-
-  static getModel(): string {
-    const config = vscode.workspace.getConfiguration("sbatlas");
-    return (
-      config.get<string>("openaiModel") ?? "gpt-4o-mini"
-    );
-  }
-
-
-  static getMaxTokens(): number {
-    const config = vscode.workspace.getConfiguration("sbatlas");
-    return config.get<number>("maxTokens") ?? 4096;
   }
 
   // ─────────────────────────────────────────
@@ -89,7 +68,6 @@ export class AIClient {
         });
 
         res.on("end", () => {
-          // HTTP error codes from the API
           if (res.statusCode === 401) {
             reject(
               new AIClientError(
@@ -135,7 +113,6 @@ export class AIClient {
       });
 
       req.on("error", (error: Error) => {
-        // Network-level failures (DNS, timeout, connection refused)
         reject(
           new AIClientError(
             `Network error while contacting OpenAI: ${error.message}`,
@@ -144,7 +121,6 @@ export class AIClient {
         );
       });
 
-      // Set a 60-second timeout — AI responses can take time
       req.setTimeout(60000, () => {
         req.destroy();
         reject(
@@ -160,7 +136,6 @@ export class AIClient {
     });
   }
 
-
   private parseAPIResponse(raw: string): AIResponse {
     let parsed: Record<string, unknown>;
 
@@ -173,11 +148,15 @@ export class AIClient {
       );
     }
 
-    const choices = parsed.choices as Array<{
-      message: { content: string };
-    }> | undefined;
+    const choices = parsed.choices as
+      | Array<{ message: { content: string } }>
+      | undefined;
 
-    if (!choices || choices.length === 0 || !choices[0].message?.content) {
+    if (
+      !choices ||
+      choices.length === 0 ||
+      !choices[0].message?.content
+    ) {
       throw new AIClientError(
         "OpenAI response did not contain expected content. Please try again.",
         "EMPTY_RESPONSE"
