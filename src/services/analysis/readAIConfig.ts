@@ -7,8 +7,9 @@ export function readAIConfig(): {
 } {
   const config = vscode.workspace.getConfiguration("sbatlas");
 
-  const apiKey = config.get<string>("openaiApiKey") ?? "";
-  const model = config.get<string>("openaiModel") ?? "gpt-4o-mini";
+  const apiKey = config.get<string>("googleApiKey") ?? "";
+  const model =
+    config.get<string>("googleModel") ?? "gemini-2.0-flash";
   const maxTokens = config.get<number>("maxTokens") ?? 4096;
 
   return {

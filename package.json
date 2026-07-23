@@ -14,25 +14,25 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "configuration": {
+     "configuration": {
       "title": "SBAtlas",
       "properties": {
-        "sbatlas.openaiApiKey": {
+        "sbatlas.googleApiKey": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Your OpenAI API key for roadmap generation. Get one at https://platform.openai.com/api-keys",
+          "markdownDescription": "Your Google AI Studio API key. Get one free at https://aistudio.google.com/apikey",
           "order": 1
         },
-        "sbatlas.openaiModel": {
+        "sbatlas.googleModel": {
           "type": "string",
-          "default": "gpt-4o-mini",
-          "markdownDescription": "The OpenAI model to use. `gpt-4o-mini` is recommended for cost efficiency.",
+          "default": "gemini-2.0-flash",
+          "markdownDescription": "The Gemini model to use. Run `SBAtlas: Select AI Model` to see available models.",
           "order": 2
         },
         "sbatlas.maxTokens": {
           "type": "number",
           "default": 4096,
-          "markdownDescription": "Maximum tokens in the AI response. Increase for projects with many requirements.",
+          "markdownDescription": "Maximum tokens in the AI response.",
           "order": 3
         }
       }
@@ -45,7 +45,8 @@
       { "command": "sbatlas.refresh", "title": "Refresh", "category": "SBAtlas" },
       { "command": "sbatlas.generateRoadmap", "title": "Generate Roadmap", "category": "SBAtlas" },
       { "command": "sbatlas.updateTaskStatus", "title": "Update Task Status", "category": "SBAtlas" },
-      { "command": "sbatlas.addTaskNote", "title": "Add Task Note", "category": "SBAtlas" }
+      { "command": "sbatlas.addTaskNote", "title": "Add Task Note", "category": "SBAtlas" },
+      { "command": "sbatlas.selectModel", "title": "Select AI Model", "category": "SBAtlas" }
     ],
     "viewsContainers": {
       "activitybar": [

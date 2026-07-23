@@ -64,8 +64,9 @@ export class AnalysisService {
       return {
         ok: false,
         error:
-          "No OpenAI API key configured. " +
-          "Go to Settings → SBAtlas → OpenAI API Key and add your key.",
+          "No Google AI API key configured. " +
+          "Go to Settings → SBAtlas → Google API Key and add your key. " +
+          "Get a free key at https://aistudio.google.com/apikey",
       };
     }
 

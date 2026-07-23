@@ -11,6 +11,7 @@ import { refreshCommand } from "./refresh";
 import { generateRoadmapCommand } from "./generateRoadmap";
 import { updateTaskStatusCommand } from "./updateTaskStatus";
 import { addTaskNoteCommand } from "./addTaskNote";
+import { selectModelCommand } from "./selectModel";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -61,6 +62,12 @@ export function registerCommands(
           roadmapService,
           args[0] as string | undefined
         ),
+    ],
+
+    // Settings commands
+    [
+      "sbatlas.selectModel",
+      () => selectModelCommand(),
     ],
   ];
 
