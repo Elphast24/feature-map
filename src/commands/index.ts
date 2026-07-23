@@ -1,16 +1,24 @@
+// src/commands/index.ts
+
 import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
+import { RoadmapService } from "../services/roadmap/roadmapService";
 import { createProjectCommand } from "./createProject";
 import { deleteProjectCommand } from "./deleteProject";
 import { pasteRequirementCommand } from "./pasteRequirement";
 import { editRequirementCommand } from "./editRequirement";
 import { refreshCommand } from "./refresh";
+import { generateRoadmapCommand } from "./generateRoadmap";
+import { updateTaskStatusCommand } from "./updateTaskStatus";
+import { addTaskNoteCommand } from "./addTaskNote";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
-  service: ProjectService
+  service: ProjectService,
+  roadmapService: RoadmapService
 ): void {
   const commands: [string, (...args: unknown[]) => Promise<void>][] = [
+    // Project commands
     [
       "sbatlas.createProject",
       () => createProjectCommand(service),
@@ -25,13 +33,34 @@ export function registerCommands(
     ],
     [
       "sbatlas.editRequirement",
-      // args[0] is the requirementId when called from tree context menu.
-      // It is undefined when called from the Command Palette.
-      (...args) => editRequirementCommand(service, args[0] as string | undefined),
+      (...args) =>
+        editRequirementCommand(service, args[0] as string | undefined),
     ],
     [
       "sbatlas.refresh",
-      () => refreshCommand(service),
+      () => refreshCommand(service, roadmapService),
+    ],
+
+    // Roadmap commands
+    [
+      "sbatlas.generateRoadmap",
+      () => generateRoadmapCommand(roadmapService),
+    ],
+    [
+      "sbatlas.updateTaskStatus",
+      (...args) =>
+        updateTaskStatusCommand(
+          roadmapService,
+          args[0] as string | undefined
+        ),
+    ],
+    [
+      "sbatlas.addTaskNote",
+      (...args) =>
+        addTaskNoteCommand(
+          roadmapService,
+          args[0] as string | undefined
+        ),
     ],
   ];
 

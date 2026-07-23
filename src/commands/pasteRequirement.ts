@@ -1,5 +1,3 @@
-// src/commands/pasteRequirement.ts
-
 import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
 

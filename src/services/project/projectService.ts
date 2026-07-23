@@ -1,10 +1,8 @@
-// src/services/project/ProjectService.ts
-
 import * as vscode from "vscode";
-import { Project, ProjectStatus } from "../../models/Project";
-import { Requirement, RequirementSource } from "../../models/Requirement";
-import { StorageService } from "../storage/StorageService";
-import { ValidationService } from "../validation/ValidationService";
+import { Project, ProjectStatus } from "../../models/project";
+import { Requirement, RequirementSource } from "../../models/requirement";
+import { StorageService } from "../storage/storageService";
+import { ValidationService } from "../validation/validationService";
 import { generateId } from "../../utils/generateId";
 
 // ─────────────────────────────────────────────────────────────────

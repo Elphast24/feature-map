@@ -1,5 +1,3 @@
-// src/commands/editRequirement.ts
-
 import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
 import { Requirement } from "../models/requirement";

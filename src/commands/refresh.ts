@@ -1,24 +1,26 @@
 import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
-
+import { RoadmapService } from "../services/roadmap/roadmapService";
 
 export async function refreshCommand(
-  service: ProjectService
+  service: ProjectService,
+  roadmapService: RoadmapService
 ): Promise<void> {
-  const result = await service.loadProject();
+  const projectResult = await service.loadProject();
+  const roadmapResult = await roadmapService.loadRoadmap();
 
-  if (!result.ok) {
-    vscode.window.showErrorMessage(`SBAtlas: Failed to refresh. ${result.error}`);
-    return;
-  }
+  if (projectResult.ok && projectResult.data) {
+    const roadmapInfo =
+      roadmapResult.ok && roadmapResult.data
+        ? ` | Roadmap: ${roadmapResult.data.completionPercentage()}% complete`
+        : " | No roadmap";
 
-  if (result.data) {
     vscode.window.showInformationMessage(
-      `SBAtlas: Refreshed — "${result.data.name}" is loaded.`
+      `SBAtlas: Refreshed — "${projectResult.data.name}" loaded.${roadmapInfo}`
     );
   } else {
     vscode.window.showInformationMessage(
-      "SBAtlas: Refreshed — no project found in this workspace."
+      "SBAtlas: Refreshed — no project found."
     );
   }
 }

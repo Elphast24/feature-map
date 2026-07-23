@@ -1,5 +1,3 @@
-// src/services/validation/ValidationService.ts
-
 import { Project } from "../../models/project";
 import { ValidationResult } from "./validationResult";
 

@@ -1,5 +1,3 @@
-// src/models/Roadmap.ts
-
 import { Phase, PhaseStatus, IPhase } from "./phase";
 import { Module } from "./module";
 import { Task } from "./task";

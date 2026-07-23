@@ -1,5 +1,3 @@
-// src/services/analysis/ResponseParser.ts
-
 import { Roadmap } from "../../models/roadMap";
 import { Phase } from "../../models/phase";
 import { Module } from "../../models/module";

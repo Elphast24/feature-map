@@ -1,5 +1,3 @@
-// src/lifecycle/ExtensionLifecycle.ts
-
 import * as vscode from "vscode";
 import { WorkspaceStorage } from "../services/storage/workspaceStorage";
 import { ProjectService } from "../services/project/projectService";
@@ -9,13 +7,15 @@ import { SBAtlasStatusBarItem } from "../views/statusbar/statusBarItem";
 import { registerCommands } from "../commands/index";
 import { readAIConfig } from "../services/analysis/readAIConfig";
 import { AnalysisService } from "../services/analysis/analysisService";
+import { RoadmapService } from "../services/roadmap/roadmapService";
 
 export class ExtensionLifecycle {
   // Services
   private storage!: WorkspaceStorage;
   private validator!: ValidationService;
   private service!: ProjectService;
-  private analysisService!: AnalysisService; 
+  private analysisService!: AnalysisService;
+  private roadmapService!: RoadmapService;
 
   // Views
   private sidebar!: SidebarProvider;
@@ -58,8 +58,12 @@ export class ExtensionLifecycle {
     return this.service;
   }
 
-  getAnalysisService(): AnalysisService {   // ← added
+  getAnalysisService(): AnalysisService {
     return this.analysisService;
+  }
+
+  getRoadmapService(): RoadmapService {
+    return this.roadmapService;
   }
 
   getSidebar(): SidebarProvider {
@@ -75,7 +79,6 @@ export class ExtensionLifecycle {
     this.validator = new ValidationService();
     this.service = new ProjectService(this.storage, this.validator);
 
-    // AnalysisService receives readAIConfig so it never imports vscode itself
     this.analysisService = new AnalysisService(
       undefined,
       undefined,
@@ -83,24 +86,47 @@ export class ExtensionLifecycle {
       readAIConfig
     );
 
+    // RoadmapService depends on storage, analysis, and project
+    this.roadmapService = new RoadmapService(
+      this.storage,
+      this.analysisService,
+      this.service
+    );
+
     console.log("[SBAtlas] Services built.");
   }
 
   private async loadInitialData(): Promise<void> {
-    const result = await this.service.loadProject();
+    // Load project first
+    const projectResult = await this.service.loadProject();
 
-    if (result.ok && result.data) {
+    if (projectResult.ok && projectResult.data) {
       console.log(
-        `[SBAtlas] Loaded project: "${result.data.name}" ` +
-          `(${result.data.requirementCount()} requirements)`
+        `[SBAtlas] Loaded project: "${projectResult.data.name}" ` +
+          `(${projectResult.data.requirementCount()} requirements)`
       );
     } else {
       console.log("[SBAtlas] No existing project in this workspace.");
     }
+
+    // Then load roadmap
+    const roadmapResult = await this.roadmapService.loadRoadmap();
+
+    if (roadmapResult.ok && roadmapResult.data) {
+      console.log(
+        `[SBAtlas] Loaded roadmap: ` +
+          `${roadmapResult.data.phaseCount()} phases, ` +
+          `${roadmapResult.data.totalTaskCount()} tasks, ` +
+          `${roadmapResult.data.completionPercentage()}% complete`
+      );
+    } else {
+      console.log("[SBAtlas] No existing roadmap in this workspace.");
+    }
   }
 
   private buildViews(context: vscode.ExtensionContext): void {
-    this.sidebar = new SidebarProvider(this.service);
+    // Sidebar now receives roadmapService too
+    this.sidebar = new SidebarProvider(this.service, this.roadmapService);
 
     this.treeView = vscode.window.createTreeView("sbatlasProjectView", {
       treeDataProvider: this.sidebar,
@@ -110,26 +136,50 @@ export class ExtensionLifecycle {
     context.subscriptions.push(this.treeView);
 
     this.statusBar = new SBAtlasStatusBarItem();
-    this.statusBar.update(this.service.getProject());
+    this.statusBar.update(
+      this.service.getProject(),
+      this.roadmapService.getRoadmap()
+    );
 
     console.log("[SBAtlas] Views built.");
   }
 
   private wireEvents(context: vscode.ExtensionContext): void {
+    // Sidebar refresh on project change
     context.subscriptions.push(
       this.service.onDidChangeProject(() => {
         this.sidebar.refresh();
       })
     );
 
+    // Sidebar refresh on roadmap change
     context.subscriptions.push(
-      this.service.onDidChangeProject((project) => {
-        this.statusBar.update(project);
+      this.roadmapService.onDidChangeRoadmap(() => {
+        this.sidebar.refresh();
       })
     );
 
+    // Status bar refresh on project change
+    context.subscriptions.push(
+      this.service.onDidChangeProject((project) => {
+        this.statusBar.update(project, this.roadmapService.getRoadmap());
+      })
+    );
+
+    // Status bar refresh on roadmap change
+    context.subscriptions.push(
+      this.roadmapService.onDidChangeRoadmap((roadmap) => {
+        this.statusBar.update(this.service.getProject(), roadmap);
+      })
+    );
+
+    // Disposal
     context.subscriptions.push({
       dispose: () => this.service.dispose(),
+    });
+
+    context.subscriptions.push({
+      dispose: () => this.roadmapService.dispose(),
     });
 
     context.subscriptions.push({
@@ -142,9 +192,7 @@ export class ExtensionLifecycle {
   private registerCommandsAndDisposables(
     context: vscode.ExtensionContext
   ): void {
-    // Pass analysisService to registerCommands so the generate
-    // roadmap command can use it in Milestone 4
-    registerCommands(context, this.service, this.analysisService);
+    registerCommands(context, this.service, this.roadmapService);
     console.log("[SBAtlas] Commands registered.");
   }
 }
