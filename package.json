@@ -37,7 +37,7 @@
         }
       }
     },
-    "commands": [
+     "commands": [
       { "command": "sbatlas.createProject", "title": "Create Project", "category": "SBAtlas" },
       { "command": "sbatlas.deleteProject", "title": "Delete Project", "category": "SBAtlas" },
       { "command": "sbatlas.pasteRequirement", "title": "Add Requirement", "category": "SBAtlas" },
@@ -46,6 +46,7 @@
       { "command": "sbatlas.generateRoadmap", "title": "Generate Roadmap", "category": "SBAtlas" },
       { "command": "sbatlas.updateTaskStatus", "title": "Update Task Status", "category": "SBAtlas" },
       { "command": "sbatlas.addTaskNote", "title": "Add Task Note", "category": "SBAtlas" },
+      { "command": "sbatlas.showProgress", "title": "Show Progress", "category": "SBAtlas" },
       { "command": "sbatlas.selectModel", "title": "Select AI Model", "category": "SBAtlas" }
     ],
     "viewsContainers": {

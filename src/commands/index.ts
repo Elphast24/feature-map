@@ -1,8 +1,7 @@
-// src/commands/index.ts
-
 import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
 import { RoadmapService } from "../services/roadmap/roadmapService";
+import { ProgressTracker } from "../services/progress/progressTracker";
 import { createProjectCommand } from "./createProject";
 import { deleteProjectCommand } from "./deleteProject";
 import { pasteRequirementCommand } from "./pasteRequirement";
@@ -12,63 +11,45 @@ import { generateRoadmapCommand } from "./generateRoadmap";
 import { updateTaskStatusCommand } from "./updateTaskStatus";
 import { addTaskNoteCommand } from "./addTaskNote";
 import { selectModelCommand } from "./selectModel";
+import { showProgressCommand } from "./showProgress";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
   service: ProjectService,
   roadmapService: RoadmapService
 ): void {
+  const tracker = new ProgressTracker();
+
   const commands: [string, (...args: unknown[]) => Promise<void>][] = [
     // Project commands
-    [
-      "sbatlas.createProject",
-      () => createProjectCommand(service),
-    ],
-    [
-      "sbatlas.deleteProject",
-      () => deleteProjectCommand(service),
-    ],
-    [
-      "sbatlas.pasteRequirement",
-      () => pasteRequirementCommand(service),
-    ],
+    ["sbatlas.createProject", () => createProjectCommand(service)],
+    ["sbatlas.deleteProject", () => deleteProjectCommand(service)],
+    ["sbatlas.pasteRequirement", () => pasteRequirementCommand(service)],
     [
       "sbatlas.editRequirement",
       (...args) =>
         editRequirementCommand(service, args[0] as string | undefined),
     ],
-    [
-      "sbatlas.refresh",
-      () => refreshCommand(service, roadmapService),
-    ],
+    ["sbatlas.refresh", () => refreshCommand(service, roadmapService)],
 
     // Roadmap commands
-    [
-      "sbatlas.generateRoadmap",
-      () => generateRoadmapCommand(roadmapService),
-    ],
+    ["sbatlas.generateRoadmap", () => generateRoadmapCommand(roadmapService)],
     [
       "sbatlas.updateTaskStatus",
       (...args) =>
-        updateTaskStatusCommand(
-          roadmapService,
-          args[0] as string | undefined
-        ),
+        updateTaskStatusCommand(roadmapService, args[0] as string | undefined),
     ],
     [
       "sbatlas.addTaskNote",
       (...args) =>
-        addTaskNoteCommand(
-          roadmapService,
-          args[0] as string | undefined
-        ),
+        addTaskNoteCommand(roadmapService, args[0] as string | undefined),
     ],
 
+    // Progress commands
+    ["sbatlas.showProgress", () => showProgressCommand(roadmapService, tracker)],
+
     // Settings commands
-    [
-      "sbatlas.selectModel",
-      () => selectModelCommand(),
-    ],
+    ["sbatlas.selectModel", () => selectModelCommand()],
   ];
 
   for (const [id, handler] of commands) {
