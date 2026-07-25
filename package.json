@@ -47,6 +47,7 @@
       { "command": "sbatlas.updateTaskStatus", "title": "Update Task Status", "category": "SBAtlas" },
       { "command": "sbatlas.addTaskNote", "title": "Add Task Note", "category": "SBAtlas" },
       { "command": "sbatlas.showProgress", "title": "Show Progress", "category": "SBAtlas" },
+      { "command": "sbatlas.showCoverage", "title": "Show Coverage", "category": "SBAtlas" },
       { "command": "sbatlas.selectModel", "title": "Select AI Model", "category": "SBAtlas" }
     ],
     "viewsContainers": {

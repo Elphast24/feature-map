@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
 import { RoadmapService } from "../services/roadmap/roadmapService";
 import { ProgressTracker } from "../services/progress/progressTracker";
+import { CoverageTracker } from "../services/coverage/coverageTracker";
 import { createProjectCommand } from "./createProject";
 import { deleteProjectCommand } from "./deleteProject";
 import { pasteRequirementCommand } from "./pasteRequirement";
@@ -12,16 +13,17 @@ import { updateTaskStatusCommand } from "./updateTaskStatus";
 import { addTaskNoteCommand } from "./addTaskNote";
 import { selectModelCommand } from "./selectModel";
 import { showProgressCommand } from "./showProgress";
+import { showCoverageCommand } from "./showCoverage";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
   service: ProjectService,
   roadmapService: RoadmapService
 ): void {
-  const tracker = new ProgressTracker();
+  const progressTracker = new ProgressTracker();
+  const coverageTracker = new CoverageTracker();
 
   const commands: [string, (...args: unknown[]) => Promise<void>][] = [
-    // Project commands
     ["sbatlas.createProject", () => createProjectCommand(service)],
     ["sbatlas.deleteProject", () => deleteProjectCommand(service)],
     ["sbatlas.pasteRequirement", () => pasteRequirementCommand(service)],
@@ -31,8 +33,6 @@ export function registerCommands(
         editRequirementCommand(service, args[0] as string | undefined),
     ],
     ["sbatlas.refresh", () => refreshCommand(service, roadmapService)],
-
-    // Roadmap commands
     ["sbatlas.generateRoadmap", () => generateRoadmapCommand(roadmapService)],
     [
       "sbatlas.updateTaskStatus",
@@ -44,11 +44,14 @@ export function registerCommands(
       (...args) =>
         addTaskNoteCommand(roadmapService, args[0] as string | undefined),
     ],
-
-    // Progress commands
-    ["sbatlas.showProgress", () => showProgressCommand(roadmapService, tracker)],
-
-    // Settings commands
+    [
+      "sbatlas.showProgress",
+      () => showProgressCommand(roadmapService, progressTracker),
+    ],
+    [
+      "sbatlas.showCoverage",
+      () => showCoverageCommand(service, roadmapService, coverageTracker),
+    ],
     ["sbatlas.selectModel", () => selectModelCommand()],
   ];
 
