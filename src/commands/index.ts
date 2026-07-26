@@ -9,11 +9,15 @@ import { pasteRequirementCommand } from "./pasteRequirement";
 import { editRequirementCommand } from "./editRequirement";
 import { refreshCommand } from "./refresh";
 import { generateRoadmapCommand } from "./generateRoadmap";
+import { deleteRoadmapCommand } from "./deleteRoadmap";
 import { updateTaskStatusCommand } from "./updateTaskStatus";
 import { addTaskNoteCommand } from "./addTaskNote";
-import { selectModelCommand } from "./selectModel";
+import { addTaskCommand } from "./addTask";
+import { removeTaskCommand } from "./removeTask";
+import { nextTaskCommand } from "./nextTask";
 import { showProgressCommand } from "./showProgress";
 import { showCoverageCommand } from "./showCoverage";
+import { selectModelCommand } from "./selectModel";
 
 export function registerCommands(
   context: vscode.ExtensionContext,
@@ -24,6 +28,7 @@ export function registerCommands(
   const coverageTracker = new CoverageTracker();
 
   const commands: [string, (...args: unknown[]) => Promise<void>][] = [
+    // Project commands
     ["sbatlas.createProject", () => createProjectCommand(service)],
     ["sbatlas.deleteProject", () => deleteProjectCommand(service)],
     ["sbatlas.pasteRequirement", () => pasteRequirementCommand(service)],
@@ -33,7 +38,10 @@ export function registerCommands(
         editRequirementCommand(service, args[0] as string | undefined),
     ],
     ["sbatlas.refresh", () => refreshCommand(service, roadmapService)],
+
+    // Roadmap commands
     ["sbatlas.generateRoadmap", () => generateRoadmapCommand(roadmapService)],
+    ["sbatlas.deleteRoadmap", () => deleteRoadmapCommand(roadmapService)],
     [
       "sbatlas.updateTaskStatus",
       (...args) =>
@@ -45,13 +53,22 @@ export function registerCommands(
         addTaskNoteCommand(roadmapService, args[0] as string | undefined),
     ],
     [
-      "sbatlas.showProgress",
-      () => showProgressCommand(roadmapService, progressTracker),
+      "sbatlas.addTask",
+      (...args) =>
+        addTaskCommand(roadmapService, service, args[0] as string | undefined),
     ],
     [
-      "sbatlas.showCoverage",
-      () => showCoverageCommand(service, roadmapService, coverageTracker),
+      "sbatlas.removeTask",
+      (...args) =>
+        removeTaskCommand(roadmapService, args[0] as string | undefined),
     ],
+    ["sbatlas.nextTask", () => nextTaskCommand(roadmapService, progressTracker)],
+
+    // Progress & Coverage commands
+    ["sbatlas.showProgress", () => showProgressCommand(roadmapService, progressTracker)],
+    ["sbatlas.showCoverage", () => showCoverageCommand(service, roadmapService, coverageTracker)],
+
+    // Settings commands
     ["sbatlas.selectModel", () => selectModelCommand()],
   ];
 
