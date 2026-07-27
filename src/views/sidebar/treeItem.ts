@@ -1,6 +1,10 @@
 import * as vscode from "vscode";
 import { Project, ProjectStatus } from "../../models/project";
 import { Requirement } from "../../models/requirement";
+import { Roadmap } from "../../models/roadMap";
+import { Phase, PhaseStatus } from "../../models/phase";
+import { Module, ModuleStatus } from "../../models/module";
+import { Task, TaskStatus } from "../../models/task";
 
 export const ContextValues = {
   projectRoot: "projectRoot",
@@ -9,23 +13,26 @@ export const ContextValues = {
   metadataSection: "metadataSection",
   metadataItem: "metadataItem",
   emptyState: "emptyState",
+  roadmapSection: "roadmapSection",
+  phaseItem: "phaseItem",
+  moduleItem: "moduleItem",
+  taskItem: "taskItem",
 } as const;
 
 export abstract class SBAtlasTreeItem extends vscode.TreeItem {
   abstract readonly contextValue: string;
 }
 
-
 export class EmptyStateItem extends SBAtlasTreeItem {
   readonly contextValue = ContextValues.emptyState;
 
   constructor() {
-    super("No project found. Click to create one.", vscode.TreeItemCollapsibleState.None);
-
+    super(
+      "No project found. Click to create one.",
+      vscode.TreeItemCollapsibleState.None
+    );
     this.tooltip = "Create a new SBAtlas project in this workspace";
     this.iconPath = new vscode.ThemeIcon("add");
-
-    // Clicking this item fires the create command directly
     this.command = {
       command: "sbatlas.createProject",
       title: "Create Project",
@@ -33,7 +40,6 @@ export class EmptyStateItem extends SBAtlasTreeItem {
   }
 }
 
-// Project root
 
 export class ProjectRootItem extends SBAtlasTreeItem {
   readonly contextValue = ContextValues.projectRoot;
@@ -44,22 +50,18 @@ export class ProjectRootItem extends SBAtlasTreeItem {
     this.description = ProjectRootItem.statusLabel(project.status);
     this.tooltip = new vscode.MarkdownString(
       `**${project.name}**\n\n` +
-      `${project.description ? project.description + "\n\n" : ""}` +
-      `Status: ${project.status}\n\n` +
-      `Requirements: ${project.requirementCount()}\n\n` +
-      `Author: ${project.metadata.author ?? "—"}\n\n` +
-      `Created: ${project.metadata.createdAt.toLocaleDateString()}`
+        `${project.description ? project.description + "\n\n" : ""}` +
+        `Status: ${project.status}\n\n` +
+        `Requirements: ${project.requirementCount()}\n\n` +
+        `Author: ${project.metadata.author ?? "—"}\n\n` +
+        `Created: ${project.metadata.createdAt.toLocaleDateString()}`
     );
-
     this.iconPath = new vscode.ThemeIcon(
       "folder",
       new vscode.ThemeColor("charts.blue")
     );
   }
 
-  /**
-   * Maps ProjectStatus enum values to readable sidebar labels.
-   */
   private static statusLabel(status: ProjectStatus): string {
     const labels: Record<ProjectStatus, string> = {
       [ProjectStatus.Active]: "● Active",
@@ -71,7 +73,9 @@ export class ProjectRootItem extends SBAtlasTreeItem {
   }
 }
 
+
 // Requirements section
+
 
 export class RequirementsSectionItem extends SBAtlasTreeItem {
   readonly contextValue = ContextValues.requirementsSection;
@@ -83,42 +87,35 @@ export class RequirementsSectionItem extends SBAtlasTreeItem {
         : vscode.TreeItemCollapsibleState.Collapsed;
 
     super("Requirements", collapsibleState);
-
     this.description = `${count} ${count === 1 ? "item" : "items"}`;
-    this.tooltip = count === 0
-      ? "No requirements yet. Right-click to add one."
-      : `${count} requirement${count === 1 ? "" : "s"}`;
-
+    this.tooltip =
+      count === 0
+        ? "No requirements yet. Right-click to add one."
+        : `${count} requirement${count === 1 ? "" : "s"}`;
     this.iconPath = new vscode.ThemeIcon("list-unordered");
   }
 }
 
 
+// Requirement item
+
+
 export class RequirementItem extends SBAtlasTreeItem {
   readonly contextValue = ContextValues.requirementItem;
-
-  /** The full requirement object, needed by editRequirement command */
   readonly requirement: Requirement;
 
   constructor(requirement: Requirement, index: number) {
-    // Truncate long requirements so they fit on one line in the sidebar
     const label = `${index + 1}. ${truncate(requirement.content, 55)}`;
-
     super(label, vscode.TreeItemCollapsibleState.None);
 
     this.requirement = requirement;
-
-    // Full content visible on hover
     this.tooltip = new vscode.MarkdownString(
       `**Requirement ${index + 1}**\n\n` +
-      `${requirement.content}\n\n` +
-      `Source: ${requirement.source}\n\n` +
-      `Added: ${requirement.createdAt.toLocaleDateString()}`
+        `${requirement.content}\n\n` +
+        `Source: ${requirement.source}\n\n` +
+        `Added: ${requirement.createdAt.toLocaleDateString()}`
     );
-
     this.iconPath = new vscode.ThemeIcon("circle-small-filled");
-
-    // Clicking a requirement opens the edit command for that specific item
     this.command = {
       command: "sbatlas.editRequirement",
       title: "Edit Requirement",
@@ -127,7 +124,9 @@ export class RequirementItem extends SBAtlasTreeItem {
   }
 }
 
+
 // Metadata section
+
 
 export class MetadataSectionItem extends SBAtlasTreeItem {
   readonly contextValue = ContextValues.metadataSection;
@@ -139,9 +138,6 @@ export class MetadataSectionItem extends SBAtlasTreeItem {
   }
 }
 
-/**
- * A single key/value row inside the Details section.
- */
 export class MetadataItem extends SBAtlasTreeItem {
   readonly contextValue = ContextValues.metadataItem;
 
@@ -153,7 +149,257 @@ export class MetadataItem extends SBAtlasTreeItem {
   }
 }
 
+
+// Roadmap section
+export class RoadmapSectionItem extends SBAtlasTreeItem {
+  readonly contextValue = ContextValues.roadmapSection;
+
+  constructor(roadmap: Roadmap | null) {
+    const hasRoadmap = roadmap !== null && roadmap.phaseCount() > 0;
+
+    super(
+      "Roadmap",
+      hasRoadmap
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Collapsed
+    );
+
+    if (hasRoadmap) {
+      const percentage = roadmap!.completionPercentage();
+      this.description = `${percentage}% complete`;
+      this.tooltip = new vscode.MarkdownString(
+        `**Roadmap**\n\n` +
+          `Phases: ${roadmap!.phaseCount()}\n\n` +
+          `Tasks: ${roadmap!.completedTaskCount()}/${roadmap!.totalTaskCount()}\n\n` +
+          `Progress: ${percentage}%`
+      );
+    } else {
+      this.description = "Not generated";
+      this.tooltip = "Generate a roadmap from your requirements";
+    }
+
+    this.iconPath = new vscode.ThemeIcon("map");
+  }
+}
+
+/**
+ * Shown inside the Roadmap section when no roadmap exists.
+ * Clicking it fires the generateRoadmap command.
+ */
+export class RoadmapEmptyItem extends SBAtlasTreeItem {
+  readonly contextValue = ContextValues.emptyState;
+
+  constructor() {
+    super(
+      "No roadmap. Click to generate one.",
+      vscode.TreeItemCollapsibleState.None
+    );
+    this.tooltip = "Generate a development roadmap from your requirements";
+    this.iconPath = new vscode.ThemeIcon("sparkle");
+    this.command = {
+      command: "sbatlas.generateRoadmap",
+      title: "Generate Roadmap",
+    };
+  }
+}
+
+
+// Phase item
+export class PhaseItem extends SBAtlasTreeItem {
+  readonly contextValue = ContextValues.phaseItem;
+  readonly phase: Phase;
+
+  constructor(phase: Phase) {
+    super(
+      `Phase ${phase.order}: ${phase.title}`,
+      vscode.TreeItemCollapsibleState.Expanded
+    );
+
+    this.phase = phase;
+
+    const percentage = phase.completionPercentage();
+    this.description = PhaseItem.statusLabel(phase.status, percentage);
+
+    this.tooltip = new vscode.MarkdownString(
+      `**Phase ${phase.order} — ${phase.title}**\n\n` +
+        `${phase.description ? phase.description + "\n\n" : ""}` +
+        `Status: ${phase.status}\n\n` +
+        `Modules: ${phase.moduleCount()}\n\n` +
+        `Tasks: ${phase.completedTaskCount()}/${phase.taskCount()}\n\n` +
+        `Progress: ${percentage}%`
+    );
+
+    this.iconPath = new vscode.ThemeIcon(
+      PhaseItem.statusThemeIcon(phase.status),
+      PhaseItem.statusColor(phase.status)
+    );
+  }
+
+  private static statusLabel(
+    status: PhaseStatus,
+    percentage: number
+  ): string {
+    if (status === PhaseStatus.Completed) {
+      return "✓ Complete";
+    }
+    if (status === PhaseStatus.InProgress) {
+      return `${percentage}%`;
+    }
+    return "Not started";
+  }
+
+  private static statusThemeIcon(status: PhaseStatus): string {
+    const icons: Record<PhaseStatus, string> = {
+      [PhaseStatus.Completed]: "pass-filled",
+      [PhaseStatus.InProgress]: "loading~spin",
+      [PhaseStatus.NotStarted]: "circle-large-outline",
+    };
+    return icons[status];
+  }
+
+  private static statusColor(
+    status: PhaseStatus
+  ): vscode.ThemeColor | undefined {
+    const colors: Record<PhaseStatus, string | undefined> = {
+      [PhaseStatus.Completed]: "testing.iconPassed",
+      [PhaseStatus.InProgress]: "charts.yellow",
+      [PhaseStatus.NotStarted]: undefined,
+    };
+    const color = colors[status];
+    return color ? new vscode.ThemeColor(color) : undefined;
+  }
+}
+
+
+// Module item
+
+
+export class ModuleItem extends SBAtlasTreeItem {
+  readonly contextValue = ContextValues.moduleItem;
+  readonly module: Module;
+
+  constructor(module: Module) {
+    const hasIncompleteTasks = module.completionPercentage() < 100;
+
+    super(
+      module.title,
+      hasIncompleteTasks
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Collapsed
+    );
+
+    this.module = module;
+
+    const percentage = module.completionPercentage();
+    this.description = `${percentage}% (${module.completedTaskCount()}/${module.taskCount()})`;
+
+    this.tooltip = new vscode.MarkdownString(
+      `**${module.title}**\n\n` +
+        `${module.description ? module.description + "\n\n" : ""}` +
+        `Status: ${module.status}\n\n` +
+        `Tasks: ${module.completedTaskCount()}/${module.taskCount()}\n\n` +
+        `Progress: ${percentage}%`
+    );
+
+    this.iconPath = new vscode.ThemeIcon(
+      ModuleItem.statusIcon(module.status)
+    );
+  }
+
+  private static statusIcon(status: ModuleStatus): string {
+    const icons: Record<ModuleStatus, string> = {
+      [ModuleStatus.Completed]: "package",
+      [ModuleStatus.InProgress]: "package",
+      [ModuleStatus.NotStarted]: "package",
+    };
+    return icons[status];
+  }
+}
+
+
+// Task item
+
+
+export class TaskItem extends SBAtlasTreeItem {
+  readonly contextValue = ContextValues.taskItem;
+  readonly task: Task;
+
+  constructor(task: Task) {
+    super(task.title, vscode.TreeItemCollapsibleState.None);
+
+    this.task = task;
+
+    this.description = TaskItem.typeLabel(task.type);
+
+    this.tooltip = new vscode.MarkdownString(
+      `**${task.title}**\n\n` +
+        `${task.description ? task.description + "\n\n" : ""}` +
+        `Status: ${task.status}\n\n` +
+        `Type: ${task.type}\n\n` +
+        (task.estimatedEffort
+          ? `Effort: ${task.estimatedEffort} points\n\n`
+          : "") +
+        (task.notes ? `**Notes:**\n${task.notes}\n\n` : "") +
+        (task.requirementIds.length > 0
+          ? `Requirement IDs: ${task.requirementIds.join(", ")}\n\n`
+          : "⚠ No requirement link\n\n") +
+        `Updated: ${task.updatedAt.toLocaleDateString()}`
+    );
+
+    this.iconPath = new vscode.ThemeIcon(
+      TaskItem.statusThemeIcon(task.status),
+      TaskItem.statusColor(task.status)
+    );
+
+    // Clicking a task opens the status update flow
+    this.command = {
+      command: "sbatlas.updateTaskStatus",
+      title: "Update Task Status",
+      arguments: [task.id],
+    };
+  }
+
+  private static statusThemeIcon(status: TaskStatus): string {
+    const icons: Record<TaskStatus, string> = {
+      [TaskStatus.Pending]: "circle-outline",
+      [TaskStatus.InProgress]: "play-circle",
+      [TaskStatus.Done]: "pass-filled",
+      [TaskStatus.Skipped]: "debug-step-over",
+    };
+    return icons[status];
+  }
+
+  private static statusColor(
+    status: TaskStatus
+  ): vscode.ThemeColor | undefined {
+    const colors: Record<TaskStatus, string | undefined> = {
+      [TaskStatus.Pending]: undefined,
+      [TaskStatus.InProgress]: "charts.yellow",
+      [TaskStatus.Done]: "testing.iconPassed",
+      [TaskStatus.Skipped]: "disabledForeground",
+    };
+    const color = colors[status];
+    return color ? new vscode.ThemeColor(color) : undefined;
+  }
+
+  private static typeLabel(type: string): string {
+    const labels: Record<string, string> = {
+      feature: "feature",
+      test: "test",
+      refactor: "refactor",
+      docs: "docs",
+      config: "config",
+      research: "research",
+      security: "security",
+      bugfix: "bugfix",
+    };
+    return labels[type] ?? type;
+  }
+}
+
+
 // Helpers
+
 
 function truncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) {

@@ -19,6 +19,35 @@ import { showProgressCommand } from "./showProgress";
 import { showCoverageCommand } from "./showCoverage";
 import { selectModelCommand } from "./selectModel";
 
+function extractId(
+  arg: unknown,
+  property: string
+): string | undefined {
+  if (!arg) {
+    return undefined;
+  }
+  // Tree item with the domain object attached
+  if (
+    typeof arg === "object" &&
+    arg !== null &&
+    property in arg
+  ) {
+    const domainObject = (arg as Record<string, unknown>)[property];
+    if (
+      typeof domainObject === "object" &&
+      domainObject !== null &&
+      "id" in domainObject
+    ) {
+      return (domainObject as { id: string }).id;
+    }
+  }
+  // Direct string ID
+  if (typeof arg === "string") {
+    return arg;
+  }
+  return undefined;
+}
+
 export function registerCommands(
   context: vscode.ExtensionContext,
   service: ProjectService,
@@ -35,7 +64,10 @@ export function registerCommands(
     [
       "sbatlas.editRequirement",
       (...args) =>
-        editRequirementCommand(service, args[0] as string | undefined),
+        editRequirementCommand(
+          service,
+          extractId(args[0], "requirement")
+        ),
     ],
     ["sbatlas.refresh", () => refreshCommand(service, roadmapService)],
 
@@ -43,30 +75,51 @@ export function registerCommands(
     ["sbatlas.generateRoadmap", () => generateRoadmapCommand(roadmapService)],
     ["sbatlas.deleteRoadmap", () => deleteRoadmapCommand(roadmapService)],
     [
-      "sbatlas.updateTaskStatus",
-      (...args) =>
-        updateTaskStatusCommand(roadmapService, args[0] as string | undefined),
-    ],
-    [
-      "sbatlas.addTaskNote",
-      (...args) =>
-        addTaskNoteCommand(roadmapService, args[0] as string | undefined),
-    ],
-    [
       "sbatlas.addTask",
       (...args) =>
-        addTaskCommand(roadmapService, service, args[0] as string | undefined),
+        addTaskCommand(
+          roadmapService,
+          service,
+          extractId(args[0], "module")
+        ),
     ],
     [
       "sbatlas.removeTask",
       (...args) =>
-        removeTaskCommand(roadmapService, args[0] as string | undefined),
+        removeTaskCommand(
+          roadmapService,
+          extractId(args[0], "task")
+        ),
+    ],
+
+    // Task execution commands
+    [
+      "sbatlas.updateTaskStatus",
+      (...args) =>
+        updateTaskStatusCommand(
+          roadmapService,
+          extractId(args[0], "task")
+        ),
+    ],
+    [
+      "sbatlas.addTaskNote",
+      (...args) =>
+        addTaskNoteCommand(
+          roadmapService,
+          extractId(args[0], "task")
+        ),
     ],
     ["sbatlas.nextTask", () => nextTaskCommand(roadmapService, progressTracker)],
 
-    // Progress & Coverage commands
-    ["sbatlas.showProgress", () => showProgressCommand(roadmapService, progressTracker)],
-    ["sbatlas.showCoverage", () => showCoverageCommand(service, roadmapService, coverageTracker)],
+    // Report commands
+    [
+      "sbatlas.showProgress",
+      () => showProgressCommand(roadmapService, progressTracker),
+    ],
+    [
+      "sbatlas.showCoverage",
+      () => showCoverageCommand(service, roadmapService, coverageTracker),
+    ],
 
     // Settings commands
     ["sbatlas.selectModel", () => selectModelCommand()],

@@ -1,6 +1,8 @@
 import * as vscode from "vscode";
 import { ProjectService } from "../../services/project/projectService";
+import { RoadmapService } from "../../services/roadmap/roadmapService";
 import { Project } from "../../models/project";
+import { Roadmap } from "../../models/roadMap";
 import {
   SBAtlasTreeItem,
   EmptyStateItem,
@@ -9,107 +11,108 @@ import {
   RequirementItem,
   MetadataSectionItem,
   MetadataItem,
+  RoadmapSectionItem,
+  RoadmapEmptyItem,
+  PhaseItem,
+  ModuleItem,
+  TaskItem,
 } from "./treeItem";
-
 
 export class SidebarProvider
   implements vscode.TreeDataProvider<SBAtlasTreeItem>
 {
-  // ── Event system ───────────────────────────────────────────────
-
-  /**
-   * Private emitter — only this class fires the event.
-   * Underscore prefix signals "internal use only" by convention.
-   */
   private readonly _onDidChangeTreeData =
     new vscode.EventEmitter<SBAtlasTreeItem | undefined | void>();
-
-  /**
-   * Public event — VS Code subscribes to this to know when to refresh.
-   * readonly so external code cannot accidentally replace the event.
-   */
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  // ── Dependencies ───────────────────────────────────────────────
+  private readonly projectService: ProjectService;
+  private readonly roadmapService: RoadmapService;
 
-  private readonly service: ProjectService;
-
-  constructor(service: ProjectService) {
-    this.service = service;
+  constructor(
+    projectService: ProjectService,
+    roadmapService: RoadmapService
+  ) {
+    this.projectService = projectService;
+    this.roadmapService = roadmapService;
   }
-
 
   getTreeItem(element: SBAtlasTreeItem): vscode.TreeItem {
     return element;
   }
 
- 
   getChildren(
     element?: SBAtlasTreeItem
   ): vscode.ProviderResult<SBAtlasTreeItem[]> {
-    const project = this.service.getProject();
+    const project = this.projectService.getProject();
+    const roadmap = this.roadmapService.getRoadmap();
 
-    // ── Root level ─────────────────────────────────────────────
+    // Root level
     if (!element) {
       return this.getRootItems(project);
     }
 
-    // ── Project root children ───────────────────────────────────
+    // Project root children
     if (element instanceof ProjectRootItem && project) {
-      return this.getProjectChildren(project);
+      return this.getProjectChildren(project, roadmap);
     }
 
-    // ── Requirements section children ───────────────────────────
+    // Requirements section children
     if (element instanceof RequirementsSectionItem && project) {
       return this.getRequirementItems(project);
     }
 
-    // ── Metadata section children ────────────────────────────────
+    // Roadmap section children 
+    if (element instanceof RoadmapSectionItem) {
+      return this.getRoadmapChildren(roadmap);
+    }
+
+    // Phase children
+    if (element instanceof PhaseItem) {
+      return this.getPhaseChildren(element.phase);
+    }
+
+    // Module children
+    if (element instanceof ModuleItem) {
+      return this.getModuleChildren(element.module);
+    }
+
+    // Metadata section children 
     if (element instanceof MetadataSectionItem && project) {
       return this.getMetadataItems(project);
     }
 
-    // Leaf nodes (RequirementItem, MetadataItem) have no children
+    // Leaf nodes have no children
     return [];
   }
-
-  // ── Public refresh method ──────────────────────────────────────
 
   refresh(): void {
     this._onDidChangeTreeData.fire();
   }
 
+  //────────────────────
   // Private tree builders
+  //────────────────────
 
-  /**
-   * Root level: either the empty state or the project root.
-   */
   private getRootItems(project: Project | null): SBAtlasTreeItem[] {
     if (!project) {
       return [new EmptyStateItem()];
     }
-
     return [new ProjectRootItem(project)];
   }
 
-  /**
-   * Children of the project root node.
-   */
-  private getProjectChildren(project: Project): SBAtlasTreeItem[] {
+  private getProjectChildren(
+    project: Project,
+    roadmap: Roadmap | null
+  ): SBAtlasTreeItem[] {
     return [
       new RequirementsSectionItem(project.requirementCount()),
+      new RoadmapSectionItem(roadmap),
       new MetadataSectionItem(),
     ];
   }
 
-  /**
-   * Children of the Requirements section.
-   * Returns one RequirementItem per requirement.
-   * Returns a placeholder if none exist.
-   */
   private getRequirementItems(project: Project): SBAtlasTreeItem[] {
     if (project.requirements.length === 0) {
-      // Show a helpful placeholder instead of an empty collapsed section
       const placeholder = new MetadataItem(
         "No requirements yet",
         "Right-click to add"
@@ -123,10 +126,46 @@ export class SidebarProvider
     );
   }
 
-  /**
-   * Children of the Details (metadata) section.
-   * Surfaces the most useful project metadata as readable rows.
-   */
+  private getRoadmapChildren(
+    roadmap: Roadmap | null
+  ): SBAtlasTreeItem[] {
+    if (!roadmap || roadmap.phaseCount() === 0) {
+      return [new RoadmapEmptyItem()];
+    }
+
+    return roadmap.phases.map((phase) => new PhaseItem(phase));
+  }
+
+  private getPhaseChildren(
+    phase: import("../../models/phase").Phase
+  ): SBAtlasTreeItem[] {
+    if (phase.modules.length === 0) {
+      const placeholder = new MetadataItem(
+        "No modules in this phase",
+        ""
+      );
+      placeholder.iconPath = new vscode.ThemeIcon("info");
+      return [placeholder];
+    }
+
+    return phase.modules.map((mod) => new ModuleItem(mod));
+  }
+
+  private getModuleChildren(
+    module: import("../../models/module").Module
+  ): SBAtlasTreeItem[] {
+    if (module.tasks.length === 0) {
+      const placeholder = new MetadataItem(
+        "No tasks in this module",
+        "Right-click to add"
+      );
+      placeholder.iconPath = new vscode.ThemeIcon("info");
+      return [placeholder];
+    }
+
+    return module.tasks.map((task) => new TaskItem(task));
+  }
+
   private getMetadataItems(project: Project): SBAtlasTreeItem[] {
     const { metadata, settings } = project;
 

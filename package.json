@@ -100,7 +100,47 @@
         {
           "command": "sbatlas.deleteProject",
           "when": "view == sbatlasProjectView && viewItem == projectRoot",
+          "group": "9_delete"
+        },
+        {
+          "command": "sbatlas.generateRoadmap",
+          "when": "view == sbatlasProjectView && viewItem == roadmapSection",
+          "group": "1_generate"
+        },
+        {
+          "command": "sbatlas.deleteRoadmap",
+          "when": "view == sbatlasProjectView && viewItem == roadmapSection",
+          "group": "9_delete"
+        },
+        {
+          "command": "sbatlas.showProgress",
+          "when": "view == sbatlasProjectView && viewItem == roadmapSection",
+          "group": "2_reports"
+        },
+        {
+          "command": "sbatlas.showCoverage",
+          "when": "view == sbatlasProjectView && viewItem == roadmapSection",
+          "group": "2_reports"
+        },
+        {
+          "command": "sbatlas.addTask",
+          "when": "view == sbatlasProjectView && viewItem == moduleItem",
           "group": "inline"
+        },
+        {
+          "command": "sbatlas.updateTaskStatus",
+          "when": "view == sbatlasProjectView && viewItem == taskItem",
+          "group": "1_status"
+        },
+        {
+          "command": "sbatlas.addTaskNote",
+          "when": "view == sbatlasProjectView && viewItem == taskItem",
+          "group": "2_notes"
+        },
+        {
+          "command": "sbatlas.removeTask",
+          "when": "view == sbatlasProjectView && viewItem == taskItem",
+          "group": "9_delete"
         }
       ]
     }
