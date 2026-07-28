@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
+import { FileStorage } from "../services/storage/fileStorage";
 import { WorkspaceStorage } from "../services/storage/workspaceStorage";
+import { StorageMigration } from "../services/storage/storageMigration";
 import { ProjectService } from "../services/project/projectService";
 import { ValidationService } from "../services/validation/validationService";
 import { SidebarProvider } from "../views/sidebar/sidebarProvider";
@@ -10,25 +12,21 @@ import { AnalysisService } from "../services/analysis/analysisService";
 import { RoadmapService } from "../services/roadmap/roadmapService";
 
 export class ExtensionLifecycle {
-  // Services
-  private storage!: WorkspaceStorage;
+  private storage!: FileStorage;
   private validator!: ValidationService;
   private service!: ProjectService;
   private analysisService!: AnalysisService;
   private roadmapService!: RoadmapService;
-
-  // Views
   private sidebar!: SidebarProvider;
   private statusBar!: SBAtlasStatusBarItem;
-
-  // VS Code tree view handle
   private treeView!: vscode.TreeView<vscode.TreeItem>;
 
   async activate(context: vscode.ExtensionContext): Promise<void> {
     console.log("[SBAtlas] Activating...");
 
     try {
-      this.buildServices(context);
+      await this.buildServices(context);
+      await this.runMigration(context);
       await this.loadInitialData();
       this.buildViews(context);
       this.wireEvents(context);
@@ -50,10 +48,6 @@ export class ExtensionLifecycle {
     console.log("[SBAtlas] Deactivated.");
   }
 
-  // ─────────────────────────────────────────
-  // Accessors
-  // ─────────────────────────────────────────
-
   getService(): ProjectService {
     return this.service;
   }
@@ -70,12 +64,22 @@ export class ExtensionLifecycle {
     return this.sidebar;
   }
 
-  // ─────────────────────────────────────────
   // Private build steps
-  // ─────────────────────────────────────────
+  private async buildServices(
+    context: vscode.ExtensionContext
+  ): Promise<void> {
+    // Resolve the workspace root
+    const workspaceRoot = this.getWorkspaceRoot();
 
-  private buildServices(context: vscode.ExtensionContext): void {
-    this.storage = new WorkspaceStorage(context.workspaceState);
+    if (!workspaceRoot) {
+      throw new Error(
+        "SBAtlas requires an open workspace folder. " +
+          "Open a folder (File → Open Folder) and try again."
+      );
+    }
+
+    // File storage is the primary storage backend
+    this.storage = new FileStorage(workspaceRoot);
     this.validator = new ValidationService();
     this.service = new ProjectService(this.storage, this.validator);
 
@@ -86,7 +90,6 @@ export class ExtensionLifecycle {
       readAIConfig
     );
 
-    // RoadmapService depends on storage, analysis, and project
     this.roadmapService = new RoadmapService(
       this.storage,
       this.analysisService,
@@ -94,10 +97,42 @@ export class ExtensionLifecycle {
     );
 
     console.log("[SBAtlas] Services built.");
+    console.log(
+      `[SBAtlas] Storage location: ${this.storage.getStorageDir().fsPath}`
+    );
+  }
+
+  /**
+   * Runs the one-time Memento → file migration.
+   * Shows a notification if data was migrated.
+   * Shows a warning if migration encountered problems.
+   */
+  private async runMigration(
+    context: vscode.ExtensionContext
+  ): Promise<void> {
+    const mementoStorage = new WorkspaceStorage(context.workspaceState);
+    const migration = new StorageMigration(this.storage, mementoStorage);
+
+    const result = await migration.migrate();
+
+    if (result.migrated) {
+      const itemList = result.migratedItems.join(", ");
+      vscode.window.showInformationMessage(
+        `SBAtlas: Project data migrated to .vscode/sbatlas/. ` +
+          `Migrated: ${itemList}. ` +
+          `You can now commit this folder to git.`
+      );
+    }
+
+    if (result.warnings.length > 0) {
+      vscode.window.showWarningMessage(
+        `SBAtlas: Migration completed with warnings: ` +
+          result.warnings.join(" | ")
+      );
+    }
   }
 
   private async loadInitialData(): Promise<void> {
-    // Load project first
     const projectResult = await this.service.loadProject();
 
     if (projectResult.ok && projectResult.data) {
@@ -109,7 +144,6 @@ export class ExtensionLifecycle {
       console.log("[SBAtlas] No existing project in this workspace.");
     }
 
-    // Then load roadmap
     const roadmapResult = await this.roadmapService.loadRoadmap();
 
     if (roadmapResult.ok && roadmapResult.data) {
@@ -125,8 +159,10 @@ export class ExtensionLifecycle {
   }
 
   private buildViews(context: vscode.ExtensionContext): void {
-    // Sidebar now receives roadmapService too
-    this.sidebar = new SidebarProvider(this.service, this.roadmapService);
+    this.sidebar = new SidebarProvider(
+      this.service,
+      this.roadmapService
+    );
 
     this.treeView = vscode.window.createTreeView("sbatlasProjectView", {
       treeDataProvider: this.sidebar,
@@ -145,35 +181,33 @@ export class ExtensionLifecycle {
   }
 
   private wireEvents(context: vscode.ExtensionContext): void {
-    // Sidebar refresh on project change
     context.subscriptions.push(
       this.service.onDidChangeProject(() => {
         this.sidebar.refresh();
       })
     );
 
-    // Sidebar refresh on roadmap change
     context.subscriptions.push(
       this.roadmapService.onDidChangeRoadmap(() => {
         this.sidebar.refresh();
       })
     );
 
-    // Status bar refresh on project change
     context.subscriptions.push(
       this.service.onDidChangeProject((project) => {
-        this.statusBar.update(project, this.roadmapService.getRoadmap());
+        this.statusBar.update(
+          project,
+          this.roadmapService.getRoadmap()
+        );
       })
     );
 
-    // Status bar refresh on roadmap change
     context.subscriptions.push(
       this.roadmapService.onDidChangeRoadmap((roadmap) => {
         this.statusBar.update(this.service.getProject(), roadmap);
       })
     );
 
-    // Disposal
     context.subscriptions.push({
       dispose: () => this.service.dispose(),
     });
@@ -194,5 +228,14 @@ export class ExtensionLifecycle {
   ): void {
     registerCommands(context, this.service, this.roadmapService);
     console.log("[SBAtlas] Commands registered.");
+  }
+
+  // Helpers
+  private getWorkspaceRoot(): vscode.Uri | null {
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+      return null;
+    }
+    return folders[0].uri;
   }
 }
