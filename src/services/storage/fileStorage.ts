@@ -1,16 +1,18 @@
-// src/services/storage/FileStorage.ts
-
 import * as vscode from "vscode";
 import * as path from "path";
-import * as fs from "fs";
 import { Project } from "../../models/project";
 import { Roadmap } from "../../models/roadMap";
+import { ProjectIndex } from "../../models/projectIndex";
 import { StorageService } from "./storageService";
+
 
 export class FileStorage implements StorageService {
   private readonly storageDir: vscode.Uri;
-  private readonly projectFile: vscode.Uri;
-  private readonly roadmapFile: vscode.Uri;
+  private readonly indexFile: vscode.Uri;
+  private readonly projectsDir: vscode.Uri;
+
+  /** The currently active project ID */
+  private activeProjectId: string | null = null;
 
   constructor(workspaceRoot: vscode.Uri) {
     this.storageDir = vscode.Uri.joinPath(
@@ -18,25 +20,62 @@ export class FileStorage implements StorageService {
       ".vscode",
       "sbatlas"
     );
-    this.projectFile = vscode.Uri.joinPath(
+    this.indexFile = vscode.Uri.joinPath(
       this.storageDir,
-      "project.json"
+      "index.json"
     );
-    this.roadmapFile = vscode.Uri.joinPath(
+    this.projectsDir = vscode.Uri.joinPath(
       this.storageDir,
-      "roadmap.json"
+      "projects"
     );
   }
 
+  // ─────────────────────────────────────────
+  // Active project management
+  // ─────────────────────────────────────────
 
-  // Project operations
+  setActiveProject(projectId: string | null): void {
+    this.activeProjectId = projectId;
+  }
+
+  getActiveProjectId(): string | null {
+    return this.activeProjectId;
+  }
+
+  // ─────────────────────────────────────────
+  // Index operations
+  // ─────────────────────────────────────────
+
+  async saveIndex(index: ProjectIndex): Promise<void> {
+    await this.ensureDir(this.storageDir);
+    await this.writeJSON(this.indexFile, index.toJSON());
+  }
+
+  async loadIndex(): Promise<ProjectIndex> {
+    const data = await this.readJSON(this.indexFile);
+    if (!data) {
+      return new ProjectIndex();
+    }
+    return ProjectIndex.fromJSON(data);
+  }
+
+  // ─────────────────────────────────────────
+  // Project operations (scoped to active project)
+  // ─────────────────────────────────────────
+
   async saveProject(project: Project): Promise<void> {
-    await this.ensureStorageDir();
-    await this.writeJSON(this.projectFile, project.toJSON());
+    const dir = this.resolveProjectDir(project.id);
+    await this.ensureDir(dir);
+    const file = vscode.Uri.joinPath(dir, "project.json");
+    await this.writeJSON(file, project.toJSON());
   }
 
   async loadProject(): Promise<Project | null> {
-    const data = await this.readJSON(this.projectFile);
+    if (!this.activeProjectId) {
+      return null;
+    }
+    const file = this.resolveProjectFile(this.activeProjectId);
+    const data = await this.readJSON(file);
     if (!data) {
       return null;
     }
@@ -44,22 +83,39 @@ export class FileStorage implements StorageService {
   }
 
   async deleteProject(): Promise<void> {
-    await this.deleteFile(this.projectFile);
+    if (!this.activeProjectId) {
+      return;
+    }
+    const dir = this.resolveProjectDir(this.activeProjectId);
+    await this.deleteDir(dir);
   }
 
   async hasProject(): Promise<boolean> {
-    return this.fileExists(this.projectFile);
+    if (!this.activeProjectId) {
+      return false;
+    }
+    const file = this.resolveProjectFile(this.activeProjectId);
+    return this.fileExists(file);
   }
 
+  // ─────────────────────────────────────────
+  // Roadmap operations (scoped to active project)
+  // ─────────────────────────────────────────
 
-  // Roadmap operations
   async saveRoadmap(roadmap: Roadmap): Promise<void> {
-    await this.ensureStorageDir();
-    await this.writeJSON(this.roadmapFile, roadmap.toJSON());
+    const projectId = roadmap.projectId;
+    const dir = this.resolveProjectDir(projectId);
+    await this.ensureDir(dir);
+    const file = vscode.Uri.joinPath(dir, "roadmap.json");
+    await this.writeJSON(file, roadmap.toJSON());
   }
 
   async loadRoadmap(): Promise<Roadmap | null> {
-    const data = await this.readJSON(this.roadmapFile);
+    if (!this.activeProjectId) {
+      return null;
+    }
+    const file = this.resolveRoadmapFile(this.activeProjectId);
+    const data = await this.readJSON(file);
     if (!data) {
       return null;
     }
@@ -67,53 +123,98 @@ export class FileStorage implements StorageService {
   }
 
   async deleteRoadmap(): Promise<void> {
-    await this.deleteFile(this.roadmapFile);
+    if (!this.activeProjectId) {
+      return;
+    }
+    const file = this.resolveRoadmapFile(this.activeProjectId);
+    await this.deleteFile(file);
   }
 
   async hasRoadmap(): Promise<boolean> {
-    return this.fileExists(this.roadmapFile);
+    if (!this.activeProjectId) {
+      return false;
+    }
+    const file = this.resolveRoadmapFile(this.activeProjectId);
+    return this.fileExists(file);
   }
 
   async deleteProjectAndRoadmap(): Promise<void> {
-    await this.deleteFile(this.projectFile);
-    await this.deleteFile(this.roadmapFile);
+    if (!this.activeProjectId) {
+      return;
+    }
+    const dir = this.resolveProjectDir(this.activeProjectId);
+    await this.deleteDir(dir);
   }
 
+  // ─────────────────────────────────────────
+  // Load a specific project by ID (not the active one)
+  // ─────────────────────────────────────────
 
-  // File path accessors
-  // Used by StorageMigration to confirm file locations
+  async loadProjectById(projectId: string): Promise<Project | null> {
+    const file = this.resolveProjectFile(projectId);
+    const data = await this.readJSON(file);
+    if (!data) {
+      return null;
+    }
+    return Project.fromJSON(data);
+  }
+
+  async loadRoadmapByProjectId(
+    projectId: string
+  ): Promise<Roadmap | null> {
+    const file = this.resolveRoadmapFile(projectId);
+    const data = await this.readJSON(file);
+    if (!data) {
+      return null;
+    }
+    return Roadmap.fromJSON(data);
+  }
+
+  async deleteProjectById(projectId: string): Promise<void> {
+    const dir = this.resolveProjectDir(projectId);
+    await this.deleteDir(dir);
+  }
+
+  // ─────────────────────────────────────────
+  // Path accessors
+  // ─────────────────────────────────────────
+
   getStorageDir(): vscode.Uri {
     return this.storageDir;
   }
 
-  getProjectFile(): vscode.Uri {
-    return this.projectFile;
-  }
-
-  getRoadmapFile(): vscode.Uri {
-    return this.roadmapFile;
-  }
-
-
+  // ─────────────────────────────────────────
   // Private file operations
-  /**
-   * Creates the .vscode/sbatlas/ directory if it does not exist.
-   * Also creates a .gitkeep so the directory is tracked by git
-   * even when no project exists.
-   */
-  private async ensureStorageDir(): Promise<void> {
+  // ─────────────────────────────────────────
+
+  private resolveProjectDir(projectId: string): vscode.Uri {
+    return vscode.Uri.joinPath(this.projectsDir, projectId);
+  }
+
+  private resolveProjectFile(projectId: string): vscode.Uri {
+    return vscode.Uri.joinPath(
+      this.projectsDir,
+      projectId,
+      "project.json"
+    );
+  }
+
+  private resolveRoadmapFile(projectId: string): vscode.Uri {
+    return vscode.Uri.joinPath(
+      this.projectsDir,
+      projectId,
+      "roadmap.json"
+    );
+  }
+
+  private async ensureDir(uri: vscode.Uri): Promise<void> {
     try {
-      await vscode.workspace.fs.createDirectory(this.storageDir);
+      await vscode.workspace.fs.createDirectory(uri);
     } catch {
-      // Directory already exists — not an error
+      // Already exists
     }
   }
 
-  /**
-   * Reads a JSON file and returns its parsed content.
-   * Returns null if the file does not exist.
-   * Throws FileStorageError if the file exists but cannot be parsed.
-   */
   private async readJSON(
     uri: vscode.Uri
   ): Promise<Record<string, unknown> | null> {
@@ -121,21 +222,8 @@ export class FileStorage implements StorageService {
       const bytes = await vscode.workspace.fs.readFile(uri);
       const text = Buffer.from(bytes).toString("utf8");
       return JSON.parse(text) as Record<string, unknown>;
-    } catch (error) {
-      // File does not exist
-      if (
-        error instanceof Error &&
-        error.message.includes("ENOENT")
-      ) {
-        return null;
-      }
-      // File exists but content is invalid JSON
-      throw new FileStorageError(
-        `Failed to read or parse ${path.basename(uri.fsPath)}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        error
-      );
+    } catch {
+      return null;
     }
   }
 
@@ -143,30 +231,30 @@ export class FileStorage implements StorageService {
     uri: vscode.Uri,
     data: Record<string, unknown>
   ): Promise<void> {
-    try {
-      const text = JSON.stringify(data, null, 2);
-      const bytes = Buffer.from(text, "utf8");
-      await vscode.workspace.fs.writeFile(uri, bytes);
-    } catch (error) {
-      throw new FileStorageError(
-        `Failed to write ${path.basename(uri.fsPath)}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        error
-      );
-    }
+    const text = JSON.stringify(data, null, 2);
+    const bytes = Buffer.from(text, "utf8");
+    await vscode.workspace.fs.writeFile(uri, bytes);
   }
 
-// Deletes a file. Safe to call when the file does not exist.
   private async deleteFile(uri: vscode.Uri): Promise<void> {
     try {
       await vscode.workspace.fs.delete(uri, { useTrash: false });
     } catch {
-      // File did not exist — not an error
+      // File did not exist
     }
   }
 
-//  Returns true if a file exists at the given URI.
+  private async deleteDir(uri: vscode.Uri): Promise<void> {
+    try {
+      await vscode.workspace.fs.delete(uri, {
+        recursive: true,
+        useTrash: false,
+      });
+    } catch {
+      // Directory did not exist
+    }
+  }
+
   private async fileExists(uri: vscode.Uri): Promise<boolean> {
     try {
       await vscode.workspace.fs.stat(uri);
@@ -177,7 +265,6 @@ export class FileStorage implements StorageService {
   }
 }
 
-// Error type
 export class FileStorageError extends Error {
   public readonly cause: unknown;
 

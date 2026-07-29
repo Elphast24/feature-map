@@ -107,55 +107,72 @@ export class ExtensionLifecycle {
    * Shows a notification if data was migrated.
    * Shows a warning if migration encountered problems.
    */
-  private async runMigration(
+    private async runMigration(
     context: vscode.ExtensionContext
   ): Promise<void> {
     const mementoStorage = new WorkspaceStorage(context.workspaceState);
-    const migration = new StorageMigration(this.storage, mementoStorage);
+    const workspaceRoot = this.getWorkspaceRoot();
+
+    if (!workspaceRoot) {
+      return;
+    }
+
+    const migration = new StorageMigration(
+      this.storage,
+      mementoStorage,
+      workspaceRoot
+    );
 
     const result = await migration.migrate();
 
     if (result.migrated) {
-      const itemList = result.migratedItems.join(", ");
       vscode.window.showInformationMessage(
-        `SBAtlas: Project data migrated to .vscode/sbatlas/. ` +
-          `Migrated: ${itemList}. ` +
-          `You can now commit this folder to git.`
+        `SBAtlas: Data migrated to .vscode/sbatlas/. ` +
+          `Migrated: ${result.migratedItems.join(", ")}.`
       );
     }
 
     if (result.warnings.length > 0) {
       vscode.window.showWarningMessage(
-        `SBAtlas: Migration completed with warnings: ` +
-          result.warnings.join(" | ")
+        `SBAtlas: Migration warnings: ${result.warnings.join(" | ")}`
       );
     }
   }
 
   private async loadInitialData(): Promise<void> {
-    const projectResult = await this.service.loadProject();
+    const fileStorage = this.storage;
 
-    if (projectResult.ok && projectResult.data) {
-      console.log(
-        `[SBAtlas] Loaded project: "${projectResult.data.name}" ` +
-          `(${projectResult.data.requirementCount()} requirements)`
-      );
+    // Load the index to find the active project
+    const index = await fileStorage.loadIndex();
+
+    if (index.activeProjectId) {
+      fileStorage.setActiveProject(index.activeProjectId);
+
+      const projectResult = await this.service.loadProject();
+
+      if (projectResult.ok && projectResult.data) {
+        console.log(
+          `[SBAtlas] Loaded active project: "${projectResult.data.name}" ` +
+            `(${projectResult.data.requirementCount()} requirements)`
+        );
+      }
+
+      const roadmapResult = await this.roadmapService.loadRoadmap();
+
+      if (roadmapResult.ok && roadmapResult.data) {
+        console.log(
+          `[SBAtlas] Loaded roadmap: ` +
+            `${roadmapResult.data.phaseCount()} phases, ` +
+            `${roadmapResult.data.totalTaskCount()} tasks`
+        );
+      }
     } else {
-      console.log("[SBAtlas] No existing project in this workspace.");
+      console.log("[SBAtlas] No active project in this workspace.");
     }
 
-    const roadmapResult = await this.roadmapService.loadRoadmap();
-
-    if (roadmapResult.ok && roadmapResult.data) {
-      console.log(
-        `[SBAtlas] Loaded roadmap: ` +
-          `${roadmapResult.data.phaseCount()} phases, ` +
-          `${roadmapResult.data.totalTaskCount()} tasks, ` +
-          `${roadmapResult.data.completionPercentage()}% complete`
-      );
-    } else {
-      console.log("[SBAtlas] No existing roadmap in this workspace.");
-    }
+    console.log(
+      `[SBAtlas] ${index.projectCount()} project(s) in workspace.`
+    );
   }
 
   private buildViews(context: vscode.ExtensionContext): void {

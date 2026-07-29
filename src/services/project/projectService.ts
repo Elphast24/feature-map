@@ -4,10 +4,9 @@ import { Requirement, RequirementSource } from "../../models/requirement";
 import { StorageService } from "../storage/storageService";
 import { ValidationService } from "../validation/validationService";
 import { generateId } from "../../utils/generateId";
+import { FileStorage } from "../storage/fileStorage";
+import { ProjectIndex } from "../../models/projectIndex";
 
-// ─────────────────────────────────────────────────────────────────
-// Result type  (unchanged)
-// ─────────────────────────────────────────────────────────────────
 
 export type ServiceResult<T> =
   | { ok: true; data: T }
@@ -15,10 +14,6 @@ export type ServiceResult<T> =
 
 const ok = <T>(data: T): ServiceResult<T> => ({ ok: true, data });
 const fail = <T>(error: string): ServiceResult<T> => ({ ok: false, error });
-
-// ─────────────────────────────────────────────────────────────────
-// Input types  (unchanged)
-// ─────────────────────────────────────────────────────────────────
 
 export interface CreateProjectInput {
   name: string;
@@ -30,54 +25,15 @@ export interface AddRequirementInput {
   content: string;
   source?: RequirementSource;
 }
-
-// ─────────────────────────────────────────────────────────────────
-// ProjectService
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * ProjectService — business logic layer.
- *
- * NEW IN THIS UPDATE:
- * ProjectService now owns an EventEmitter that fires whenever
- * project data changes. Any UI component (sidebar, status bar,
- * future webview) subscribes to onDidChangeProject once and
- * refreshes automatically.
- *
- * Commands never call sidebar.refresh() directly. They call
- * the service. The service fires the event. The sidebar hears it.
- * This is the Observer Pattern.
- */
 export class ProjectService {
   private storage: StorageService;
   private validator: ValidationService;
   private currentProject: Project | null = null;
 
-  // ── Event system ───────────────────────────────────────────────
-  /**
-   * Private emitter — only ProjectService fires this.
-   *
-   * Why vscode.EventEmitter?
-   * VS Code provides a battle-tested EventEmitter that integrates
-   * with the extension lifecycle (disposable). Using Node's built-in
-   * EventEmitter would work but would not be automatically cleaned up
-   * when the extension deactivates, risking memory leaks.
-   */
+
   private readonly _onDidChangeProject =
     new vscode.EventEmitter<Project | null>();
 
-  /**
-   * Public event — subscribers listen here.
-   *
-   * Usage:
-   *   projectService.onDidChangeProject(() => {
-   *     sidebar.refresh();
-   *   });
-   *
-   * The emitter sends the current project (or null if deleted)
-   * so subscribers can react intelligently without calling
-   * getProject() separately.
-   */
   readonly onDidChangeProject = this._onDidChangeProject.event;
 
   constructor(storage: StorageService, validator?: ValidationService) {
@@ -105,14 +61,6 @@ export class ProjectService {
       return fail(validation.summary);
     }
 
-    const alreadyExists = await this.storage.hasProject();
-    if (alreadyExists) {
-      return fail(
-        "A project already exists in this workspace. " +
-          "Delete it before creating a new one."
-      );
-    }
-
     const project = new Project(
       generateId(),
       input.name.trim(),
@@ -121,10 +69,21 @@ export class ProjectService {
       input.author?.trim()
     );
 
+    // Update file storage to point to the new project
+    const fileStorage = this.getFileStorage();
+    if (fileStorage) {
+      fileStorage.setActiveProject(project.id);
+
+      // Update the index
+      const index = await fileStorage.loadIndex();
+      index.addProject(project.id, project.name);
+      index.setActive(project.id);
+      await fileStorage.saveIndex(index);
+    }
+
     await this.storage.saveProject(project);
     this.currentProject = project;
 
-    // ← Fire the event so all subscribers know about the new project
     this._onDidChangeProject.fire(this.currentProject);
 
     return ok(project);
@@ -140,15 +99,34 @@ export class ProjectService {
     return ok(project);
   }
 
-  async deleteProject(): Promise<ServiceResult<void>> {
+   async deleteProject(): Promise<ServiceResult<void>> {
     if (!this.currentProject) {
       return fail("No project to delete.");
     }
 
-    await this.storage.deleteProject();
-    this.currentProject = null;
+    const projectId = this.currentProject.id;
 
-    // ← Fire with null so the sidebar shows the empty state
+    await this.storage.deleteProjectAndRoadmap();
+
+    // Update the index
+    const fileStorage = this.getFileStorage();
+    if (fileStorage) {
+      const index = await fileStorage.loadIndex();
+      index.removeProject(projectId);
+
+      // Activate the next available project or clear
+      if (!index.isEmpty()) {
+        const next = index.projects[0];
+        index.setActive(next.id);
+        fileStorage.setActiveProject(next.id);
+      } else {
+        fileStorage.setActiveProject(null);
+      }
+
+      await fileStorage.saveIndex(index);
+    }
+
+    this.currentProject = null;
     this._onDidChangeProject.fire(null);
 
     return ok(undefined);
@@ -191,27 +169,13 @@ export class ProjectService {
     this.currentProject.name = newName.trim();
     this.currentProject.metadata.touch();
 
-    await this.persistIfAutoSave();
-    this._onDidChangeProject.fire(this.currentProject);
-
-    return ok(this.currentProject);
-  }
-
-  async updateDescription(
-    description: string
-  ): Promise<ServiceResult<Project>> {
-    if (!this.currentProject) {
-      return fail("No project is loaded.");
+    // Update the index name
+    const fileStorage = this.getFileStorage();
+    if (fileStorage) {
+      const index = await fileStorage.loadIndex();
+      index.updateName(this.currentProject.id, newName.trim());
+      await fileStorage.saveIndex(index);
     }
-
-    const validation =
-      this.validator.validateProjectDescription(description);
-    if (!validation.isValid) {
-      return fail(validation.summary);
-    }
-
-    this.currentProject.description = description.trim();
-    this.currentProject.metadata.touch();
 
     await this.persistIfAutoSave();
     this._onDidChangeProject.fire(this.currentProject);
@@ -346,5 +310,55 @@ export class ProjectService {
     if (this.currentProject?.settings.autoSave) {
       await this.storage.saveProject(this.currentProject);
     }
+  }
+
+   private getFileStorage(): FileStorage | null {
+    if (this.storage instanceof FileStorage) {
+      return this.storage;
+    }
+    return null;
+  }
+
+
+  async switchProject(
+    projectId: string
+  ): Promise<ServiceResult<Project>> {
+    const fileStorage = this.getFileStorage();
+    if (!fileStorage) {
+      return fail("Multi-project support requires file-based storage.");
+    }
+
+    const index = await fileStorage.loadIndex();
+    const entry = index.findEntry(projectId);
+
+    if (!entry) {
+      return fail(`Project "${projectId}" not found.`);
+    }
+
+    // Activate the new project
+    fileStorage.setActiveProject(projectId);
+    index.setActive(projectId);
+    await fileStorage.saveIndex(index);
+
+    // Load the project
+    const project = await fileStorage.loadProjectById(projectId);
+    if (!project) {
+      return fail(`Project "${entry.name}" data could not be loaded.`);
+    }
+
+    this.currentProject = project;
+    this._onDidChangeProject.fire(this.currentProject);
+
+    return ok(project);
+  }
+
+  async listProjects(): Promise<ServiceResult<ProjectIndex>> {
+    const fileStorage = this.getFileStorage();
+    if (!fileStorage) {
+      return fail("Multi-project support requires file-based storage.");
+    }
+
+    const index = await fileStorage.loadIndex();
+    return ok(index);
   }
 }

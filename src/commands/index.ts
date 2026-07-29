@@ -3,6 +3,8 @@ import { ProjectService } from "../services/project/projectService";
 import { RoadmapService } from "../services/roadmap/roadmapService";
 import { ProgressTracker } from "../services/progress/progressTracker";
 import { CoverageTracker } from "../services/coverage/coverageTracker";
+import { listProjectsCommand } from "./listProjects";
+import { switchProjectCommand } from "./switchProject";
 import { createProjectCommand } from "./createProject";
 import { deleteProjectCommand } from "./deleteProject";
 import { pasteRequirementCommand } from "./pasteRequirement";
@@ -58,6 +60,8 @@ export function registerCommands(
 
   const commands: [string, (...args: unknown[]) => Promise<void>][] = [
     // Project commands
+    ["sbatlas.switchProject", () => switchProjectCommand(service, roadmapService)],
+    ["sbatlas.listProjects", () => listProjectsCommand(service)],
     ["sbatlas.createProject", () => createProjectCommand(service)],
     ["sbatlas.deleteProject", () => deleteProjectCommand(service)],
     ["sbatlas.pasteRequirement", () => pasteRequirementCommand(service)],
