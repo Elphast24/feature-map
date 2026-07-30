@@ -1,43 +1,37 @@
-// src/commands/createProject.ts
-
 import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
-
+import { SettingsService } from "../services/settings/settingsService";
 
 export async function createProjectCommand(
-  service: ProjectService
+  service: ProjectService,
+  settingsService: SettingsService
 ): Promise<void> {
-  // ── Step 1: Project name ───────────────────────────────────────
+  // Name
   const name = await vscode.window.showInputBox({
     title: "SBAtlas — New Project",
     prompt: "Enter a name for your project",
     placeHolder: "e.g. Inventory System",
-    ignoreFocusOut: true, // keeps the box open if user clicks away
+    ignoreFocusOut: true,
     validateInput: (value) => {
-      // Inline validation gives the user instant feedback while typing.
-      // This is separate from ValidationService — it is purely cosmetic,
-      // preventing an obviously bad submission before it even reaches the service.
       if (!value || value.trim().length === 0) {
         return "Project name is required.";
       }
       if (value.trim().length > 100) {
         return "Project name cannot exceed 100 characters.";
       }
-      return null; // null means input is valid
+      return null;
     },
   });
 
-  // showInputBox returns undefined if the user pressed Escape.
-  // Treat that as a deliberate cancellation — do nothing, no error message.
   if (name === undefined) {
     return;
   }
 
-  // ── Step 2: Description (optional) ────────────────────────────
+  // Description
   const description = await vscode.window.showInputBox({
     title: "SBAtlas — New Project",
-    prompt: "Enter a short description (optional — press Enter to skip)",
-    placeHolder: "e.g. Track warehouse stock levels in real time.",
+    prompt: "Enter a short description (optional)",
+    placeHolder: "e.g. Track warehouse stock levels.",
     ignoreFocusOut: true,
     validateInput: (value) => {
       if (value && value.length > 500) {
@@ -51,11 +45,14 @@ export async function createProjectCommand(
     return;
   }
 
-  // ── Step 3: Author (optional) ──────────────────────────────────
+  // Author — pre-filled from workspace settings
+  const defaultAuthor = settingsService.getSettings().defaultAuthor;
+
   const author = await vscode.window.showInputBox({
     title: "SBAtlas — New Project",
-    prompt: "Enter your name as author (optional — press Enter to skip)",
+    prompt: "Enter your name as author (optional)",
     placeHolder: "e.g. Alex",
+    value: defaultAuthor, // ← pre-filled from settings
     ignoreFocusOut: true,
     validateInput: (value) => {
       if (value && value.trim().length > 100) {
@@ -69,17 +66,15 @@ export async function createProjectCommand(
     return;
   }
 
-  // ── Step 4: Call the service ───────────────────────────────────
   const result = await service.createProject({
     name,
     description: description || undefined,
     author: author || undefined,
   });
 
-  // ── Step 5: Report the outcome ─────────────────────────────────
   if (result.ok) {
     vscode.window.showInformationMessage(
-      `SBAtlas: Project "${result.data.name}" created successfully.`
+      `SBAtlas: Project "${result.data.name}" created.`
     );
   } else {
     vscode.window.showErrorMessage(`SBAtlas: ${result.error}`);

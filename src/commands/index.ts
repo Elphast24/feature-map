@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
 import { RoadmapService } from "../services/roadmap/roadmapService";
+import { SettingsService } from "../services/settings/settingsService";
 import { ProgressTracker } from "../services/progress/progressTracker";
 import { CoverageTracker } from "../services/coverage/coverageTracker";
-import { listProjectsCommand } from "./listProjects";
-import { switchProjectCommand } from "./switchProject";
 import { createProjectCommand } from "./createProject";
 import { deleteProjectCommand } from "./deleteProject";
+import { switchProjectCommand } from "./switchProject";
+import { listProjectsCommand } from "./listProjects";
 import { pasteRequirementCommand } from "./pasteRequirement";
 import { editRequirementCommand } from "./editRequirement";
 import { refreshCommand } from "./refresh";
@@ -20,6 +21,7 @@ import { nextTaskCommand } from "./nextTask";
 import { showProgressCommand } from "./showProgress";
 import { showCoverageCommand } from "./showCoverage";
 import { selectModelCommand } from "./selectModel";
+import { openSettingsCommand } from "./openSettings";
 
 function extractId(
   arg: unknown,
@@ -28,7 +30,6 @@ function extractId(
   if (!arg) {
     return undefined;
   }
-  // Tree item with the domain object attached
   if (
     typeof arg === "object" &&
     arg !== null &&
@@ -43,7 +44,6 @@ function extractId(
       return (domainObject as { id: string }).id;
     }
   }
-  // Direct string ID
   if (typeof arg === "string") {
     return arg;
   }
@@ -53,17 +53,18 @@ function extractId(
 export function registerCommands(
   context: vscode.ExtensionContext,
   service: ProjectService,
-  roadmapService: RoadmapService
+  roadmapService: RoadmapService,
+  settingsService: SettingsService
 ): void {
   const progressTracker = new ProgressTracker();
   const coverageTracker = new CoverageTracker();
 
   const commands: [string, (...args: unknown[]) => Promise<void>][] = [
     // Project commands
+    ["sbatlas.createProject", () => createProjectCommand(service, settingsService)],
+    ["sbatlas.deleteProject", () => deleteProjectCommand(service)],
     ["sbatlas.switchProject", () => switchProjectCommand(service, roadmapService)],
     ["sbatlas.listProjects", () => listProjectsCommand(service)],
-    ["sbatlas.createProject", () => createProjectCommand(service)],
-    ["sbatlas.deleteProject", () => deleteProjectCommand(service)],
     ["sbatlas.pasteRequirement", () => pasteRequirementCommand(service)],
     [
       "sbatlas.editRequirement",
@@ -95,8 +96,6 @@ export function registerCommands(
           extractId(args[0], "task")
         ),
     ],
-
-    // Task execution commands
     [
       "sbatlas.updateTaskStatus",
       (...args) =>
@@ -115,17 +114,12 @@ export function registerCommands(
     ],
     ["sbatlas.nextTask", () => nextTaskCommand(roadmapService, progressTracker)],
 
-    // Report commands
-    [
-      "sbatlas.showProgress",
-      () => showProgressCommand(roadmapService, progressTracker),
-    ],
-    [
-      "sbatlas.showCoverage",
-      () => showCoverageCommand(service, roadmapService, coverageTracker),
-    ],
+    // Reports
+    ["sbatlas.showProgress", () => showProgressCommand(roadmapService, progressTracker)],
+    ["sbatlas.showCoverage", () => showCoverageCommand(service, roadmapService, coverageTracker)],
 
-    // Settings commands
+    // Settings
+    ["sbatlas.openSettings", () => openSettingsCommand(settingsService)],
     ["sbatlas.selectModel", () => selectModelCommand()],
   ];
 

@@ -4,12 +4,14 @@ import { Project } from "../../models/project";
 import { Roadmap } from "../../models/roadMap";
 import { ProjectIndex } from "../../models/projectIndex";
 import { StorageService } from "./storageService";
+import { WorkspaceSettings } from "../../models/workspaceSetting";
 
 
 export class FileStorage implements StorageService {
   private readonly storageDir: vscode.Uri;
   private readonly indexFile: vscode.Uri;
   private readonly projectsDir: vscode.Uri;
+  private readonly settingsFile: vscode.Uri;
 
   /** The currently active project ID */
   private activeProjectId: string | null = null;
@@ -29,6 +31,8 @@ export class FileStorage implements StorageService {
       "projects"
     );
   }
+
+  
 
   // ─────────────────────────────────────────
   // Active project management
@@ -262,6 +266,28 @@ export class FileStorage implements StorageService {
     } catch {
       return false;
     }
+  }
+
+  // Settings operations 
+  async saveSettings(settings: WorkspaceSettings): Promise<void> {
+    await this.ensureDir(this.storageDir);
+    await this.writeJSON(this.settingsFile, settings.toJSON());
+  }
+
+  async loadSettings(): Promise<WorkspaceSettings> {
+    const data = await this.readJSON(this.settingsFile);
+    if (!data) {
+      return new WorkspaceSettings();
+    }
+    return WorkspaceSettings.fromJSON(data);
+  }
+
+  async hasSettings(): Promise<boolean> {
+    return this.fileExists(this.settingsFile);
+  }
+
+  getSettingsFile(): vscode.Uri {
+    return this.settingsFile;
   }
 }
 

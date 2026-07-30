@@ -4,10 +4,11 @@ import { WorkspaceStorage } from "../services/storage/workspaceStorage";
 import { StorageMigration } from "../services/storage/storageMigration";
 import { ProjectService } from "../services/project/projectService";
 import { ValidationService } from "../services/validation/validationService";
+import { SettingsService } from "../services/settings/settingsService";
 import { SidebarProvider } from "../views/sidebar/sidebarProvider";
 import { SBAtlasStatusBarItem } from "../views/statusbar/statusBarItem";
 import { registerCommands } from "../commands/index";
-import { readAIConfig } from "../services/analysis/readAIConfig";
+import { createAIConfigReader } from "../services/analysis/readAIConfig";
 import { AnalysisService } from "../services/analysis/analysisService";
 import { RoadmapService } from "../services/roadmap/roadmapService";
 
@@ -15,6 +16,7 @@ export class ExtensionLifecycle {
   private storage!: FileStorage;
   private validator!: ValidationService;
   private service!: ProjectService;
+  private settingsService!: SettingsService;
   private analysisService!: AnalysisService;
   private roadmapService!: RoadmapService;
   private sidebar!: SidebarProvider;
@@ -35,7 +37,6 @@ export class ExtensionLifecycle {
       console.log("[SBAtlas] Activated successfully.");
     } catch (error) {
       console.error("[SBAtlas] Activation failed:", error);
-
       vscode.window.showErrorMessage(
         `SBAtlas failed to activate: ${
           error instanceof Error ? error.message : String(error)
@@ -48,46 +49,41 @@ export class ExtensionLifecycle {
     console.log("[SBAtlas] Deactivated.");
   }
 
-  getService(): ProjectService {
-    return this.service;
-  }
-
-  getAnalysisService(): AnalysisService {
-    return this.analysisService;
-  }
-
-  getRoadmapService(): RoadmapService {
-    return this.roadmapService;
-  }
-
-  getSidebar(): SidebarProvider {
-    return this.sidebar;
-  }
+  getService(): ProjectService { return this.service; }
+  getSettingsService(): SettingsService { return this.settingsService; }
+  getAnalysisService(): AnalysisService { return this.analysisService; }
+  getRoadmapService(): RoadmapService { return this.roadmapService; }
+  getSidebar(): SidebarProvider { return this.sidebar; }
 
   // Private build steps
   private async buildServices(
     context: vscode.ExtensionContext
   ): Promise<void> {
-    // Resolve the workspace root
     const workspaceRoot = this.getWorkspaceRoot();
 
     if (!workspaceRoot) {
       throw new Error(
         "SBAtlas requires an open workspace folder. " +
-          "Open a folder (File → Open Folder) and try again."
+          "Open a folder and try again."
       );
     }
 
-    // File storage is the primary storage backend
     this.storage = new FileStorage(workspaceRoot);
     this.validator = new ValidationService();
+
+    // Settings must be loaded before AnalysisService
+    // so the AI config reader can use workspace settings
+    this.settingsService = new SettingsService(this.storage);
+    await this.settingsService.loadSettings();
+
     this.service = new ProjectService(this.storage, this.validator);
 
+    // AnalysisService uses workspace settings for model/maxTokens
     this.analysisService = new AnalysisService(
       undefined,
       undefined,
       undefined,
-      readAIConfig
+      createAIConfigReader(this.settingsService)
     );
 
     this.roadmapService = new RoadmapService(
@@ -98,25 +94,19 @@ export class ExtensionLifecycle {
 
     console.log("[SBAtlas] Services built.");
     console.log(
-      `[SBAtlas] Storage location: ${this.storage.getStorageDir().fsPath}`
+      `[SBAtlas] Storage: ${this.storage.getStorageDir().fsPath}`
     );
   }
 
-  /**
-   * Runs the one-time Memento → file migration.
-   * Shows a notification if data was migrated.
-   * Shows a warning if migration encountered problems.
-   */
-    private async runMigration(
+  private async runMigration(
     context: vscode.ExtensionContext
   ): Promise<void> {
-    const mementoStorage = new WorkspaceStorage(context.workspaceState);
     const workspaceRoot = this.getWorkspaceRoot();
-
     if (!workspaceRoot) {
       return;
     }
 
+    const mementoStorage = new WorkspaceStorage(context.workspaceState);
     const migration = new StorageMigration(
       this.storage,
       mementoStorage,
@@ -140,34 +130,36 @@ export class ExtensionLifecycle {
   }
 
   private async loadInitialData(): Promise<void> {
-    const fileStorage = this.storage;
-
-    // Load the index to find the active project
-    const index = await fileStorage.loadIndex();
+    const index = await this.storage.loadIndex();
 
     if (index.activeProjectId) {
-      fileStorage.setActiveProject(index.activeProjectId);
+      this.storage.setActiveProject(index.activeProjectId);
 
       const projectResult = await this.service.loadProject();
-
       if (projectResult.ok && projectResult.data) {
         console.log(
-          `[SBAtlas] Loaded active project: "${projectResult.data.name}" ` +
-            `(${projectResult.data.requirementCount()} requirements)`
+          `[SBAtlas] Loaded project: "${projectResult.data.name}"`
         );
       }
 
       const roadmapResult = await this.roadmapService.loadRoadmap();
-
       if (roadmapResult.ok && roadmapResult.data) {
         console.log(
           `[SBAtlas] Loaded roadmap: ` +
-            `${roadmapResult.data.phaseCount()} phases, ` +
-            `${roadmapResult.data.totalTaskCount()} tasks`
+            `${roadmapResult.data.phaseCount()} phases`
         );
       }
     } else {
-      console.log("[SBAtlas] No active project in this workspace.");
+      console.log("[SBAtlas] No active project.");
+    }
+
+    // Show welcome message if no projects exist
+    const wsSettings = this.settingsService.getSettings();
+    if (
+      index.isEmpty() &&
+      wsSettings.showWelcomeOnEmpty
+    ) {
+      this.showWelcomeMessage();
     }
 
     console.log(
@@ -181,10 +173,13 @@ export class ExtensionLifecycle {
       this.roadmapService
     );
 
-    this.treeView = vscode.window.createTreeView("sbatlasProjectView", {
-      treeDataProvider: this.sidebar,
-      showCollapseAll: true,
-    });
+    this.treeView = vscode.window.createTreeView(
+      "sbatlasProjectView",
+      {
+        treeDataProvider: this.sidebar,
+        showCollapseAll: true,
+      }
+    );
 
     context.subscriptions.push(this.treeView);
 
@@ -221,7 +216,17 @@ export class ExtensionLifecycle {
 
     context.subscriptions.push(
       this.roadmapService.onDidChangeRoadmap((roadmap) => {
-        this.statusBar.update(this.service.getProject(), roadmap);
+        this.statusBar.update(
+          this.service.getProject(),
+          roadmap
+        );
+      })
+    );
+
+    // Settings change — refresh sidebar in case display settings changed
+    context.subscriptions.push(
+      this.settingsService.onDidChangeSettings(() => {
+        this.sidebar.refresh();
       })
     );
 
@@ -234,6 +239,10 @@ export class ExtensionLifecycle {
     });
 
     context.subscriptions.push({
+      dispose: () => this.settingsService.dispose(),
+    });
+
+    context.subscriptions.push({
       dispose: () => this.statusBar.dispose(),
     });
 
@@ -243,16 +252,39 @@ export class ExtensionLifecycle {
   private registerCommandsAndDisposables(
     context: vscode.ExtensionContext
   ): void {
-    registerCommands(context, this.service, this.roadmapService);
+    registerCommands(
+      context,
+      this.service,
+      this.roadmapService,
+      this.settingsService
+    );
     console.log("[SBAtlas] Commands registered.");
   }
 
-  // Helpers
   private getWorkspaceRoot(): vscode.Uri | null {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) {
       return null;
     }
     return folders[0].uri;
+  }
+
+  private showWelcomeMessage(): void {
+    vscode.window
+      .showInformationMessage(
+        "Welcome to SBAtlas! Create your first project to get started.",
+        "Create Project",
+        "Don't show again"
+      )
+      .then((action) => {
+        if (action === "Create Project") {
+          vscode.commands.executeCommand("sbatlas.createProject");
+        } else if (action === "Don't show again") {
+          this.settingsService.updateSetting(
+            "showWelcomeOnEmpty",
+            false
+          );
+        }
+      });
   }
 }
