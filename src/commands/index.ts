@@ -22,6 +22,10 @@ import { showProgressCommand } from "./showProgress";
 import { showCoverageCommand } from "./showCoverage";
 import { selectModelCommand } from "./selectModel";
 import { openSettingsCommand } from "./openSettings";
+import { importRequirementsCommand } from "./importRequirements";
+import { bulkAddRequirementsCommand } from "./bulkAddRequirements";
+import { setRequirementPriorityCommand } from "./setRequirementPriority";
+import { tagRequirementCommand } from "./tagRequirement";
 
 function extractId(
   arg: unknown,
@@ -121,6 +125,27 @@ export function registerCommands(
     // Settings
     ["sbatlas.openSettings", () => openSettingsCommand(settingsService)],
     ["sbatlas.selectModel", () => selectModelCommand()],
+
+    // Requirement Import
+    ["sbatlas.importRequirements", () => importRequirementsCommand(service)],
+    ["sbatlas.bulkAddRequirements", () => bulkAddRequirementsCommand(service)],
+    [
+      "sbatlas.setRequirementPriority",
+      (...args) =>
+        setRequirementPriorityCommand(
+          service,
+          extractId(args[0], "requirement")
+        ),
+    ],
+    [
+      "sbatlas.tagRequirement",
+      (...args) =>
+        tagRequirementCommand(
+          service,
+          extractId(args[0], "requirement")
+        ),
+    ],
+    ["sbatlas.confirmBulkAdd", async () => {}]
   ];
 
   for (const [id, handler] of commands) {

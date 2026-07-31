@@ -1,11 +1,15 @@
 import * as vscode from "vscode";
 import { Project, ProjectStatus } from "../../models/project";
-import { Requirement, RequirementSource } from "../../models/requirement";
+import { Requirement, RequirementSource, RequirementPriority } from "../../models/requirement";
 import { StorageService } from "../storage/storageService";
 import { ValidationService } from "../validation/validationService";
 import { generateId } from "../../utils/generateId";
 import { FileStorage } from "../storage/fileStorage";
 import { ProjectIndex } from "../../models/projectIndex";
+
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : text.slice(0, max).trimEnd() + "…";
+}
 
 
 export type ServiceResult<T> =
@@ -360,5 +364,149 @@ export class ProjectService {
 
     const index = await fileStorage.loadIndex();
     return ok(index);
+  }
+
+
+  async addRequirementsBulk(
+    items: { content: string; source?: RequirementSource; priority?: RequirementPriority }[]
+  ): Promise<ServiceResult<{
+    added: Requirement[];
+    skipped: number;
+    errors: string[];
+  }>> {
+    if (!this.currentProject) {
+      return fail("No project is loaded.");
+    }
+
+    const added: Requirement[] = [];
+    const errors: string[] = [];
+    let skipped = 0;
+
+    for (const item of items) {
+      const existingContents = this.currentProject.requirements.map(
+        (r) => r.content
+      );
+
+      const validation = this.validator.validateAddRequirement(
+        item.content,
+        existingContents
+      );
+
+      if (!validation.isValid) {
+        if (
+          validation.firstError?.includes("identical content")
+        ) {
+          skipped++;
+        } else {
+          errors.push(
+            `"${truncate(item.content, 40)}": ${validation.summary}`
+          );
+        }
+        continue;
+      }
+
+      const requirement = new Requirement(
+        generateId(),
+        item.content.trim(),
+        item.source ?? "bulk",
+        item.priority ?? "medium"
+      );
+
+      this.currentProject.addRequirement(requirement);
+      added.push(requirement);
+    }
+
+    if (added.length > 0) {
+      await this.persistIfAutoSave();
+      this._onDidChangeProject.fire(this.currentProject);
+    }
+
+    return ok({ added, skipped, errors });
+  }
+
+  /**
+   * Updates the priority of a requirement.
+   */
+  async updateRequirementPriority(
+    requirementId: string,
+    priority: RequirementPriority
+  ): Promise<ServiceResult<Requirement>> {
+    if (!this.currentProject) {
+      return fail("No project is loaded.");
+    }
+
+    const requirement =
+      this.currentProject.findRequirement(requirementId);
+    if (!requirement) {
+      return fail(`Requirement "${requirementId}" not found.`);
+    }
+
+    requirement.updatePriority(priority);
+    this.currentProject.metadata.touch();
+
+    await this.persistIfAutoSave();
+    this._onDidChangeProject.fire(this.currentProject);
+
+    return ok(requirement);
+  }
+
+  /**
+   * Adds a tag to a requirement.
+   */
+  async addRequirementTag(
+    requirementId: string,
+    tag: string
+  ): Promise<ServiceResult<Requirement>> {
+    if (!this.currentProject) {
+      return fail("No project is loaded.");
+    }
+
+    if (!tag || tag.trim().length === 0) {
+      return fail("Tag cannot be empty.");
+    }
+
+    if (tag.trim().length > 30) {
+      return fail("Tag cannot exceed 30 characters.");
+    }
+
+    const requirement =
+      this.currentProject.findRequirement(requirementId);
+    if (!requirement) {
+      return fail(`Requirement "${requirementId}" not found.`);
+    }
+
+    requirement.addTag(tag);
+    this.currentProject.metadata.touch();
+
+    await this.persistIfAutoSave();
+    this._onDidChangeProject.fire(this.currentProject);
+
+    return ok(requirement);
+  }
+
+  /**
+   * Removes a tag from a requirement.
+   */
+  async removeRequirementTag(
+    requirementId: string,
+    tag: string
+  ): Promise<ServiceResult<Requirement>> {
+    if (!this.currentProject) {
+      return fail("No project is loaded.");
+    }
+
+    const requirement =
+      this.currentProject.findRequirement(requirementId);
+    if (!requirement) {
+      return fail(`Requirement "${requirementId}" not found.`);
+    }
+
+    requirement.removeTag(tag);
+    this.currentProject.metadata.touch();
+
+    await this.persistIfAutoSave();
+    this._onDidChangeProject.fire(this.currentProject);
+
+    return ok(requirement);
   }
 }

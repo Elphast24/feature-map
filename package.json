@@ -54,7 +54,12 @@
       { "command": "sbatlas.nextTask", "title": "Next Task", "category": "SBAtlas" },
       { "command": "sbatlas.showProgress", "title": "Show Progress", "category": "SBAtlas" },
       { "command": "sbatlas.showCoverage", "title": "Show Coverage", "category": "SBAtlas" },
-      { "command": "sbatlas.selectModel", "title": "Select AI Model", "category": "SBAtlas" }
+      { "command": "sbatlas.selectModel", "title": "Select AI Model", "category": "SBAtlas" },
+       { "command": "sbatlas.importRequirements", "title": "Import Requirements from File", "category": "SBAtlas" },
+      { "command": "sbatlas.bulkAddRequirements", "title": "Bulk Add Requirements", "category": "SBAtlas" },
+      { "command": "sbatlas.setRequirementPriority", "title": "Set Requirement Priority", "category": "SBAtlas" },
+      { "command": "sbatlas.tagRequirement", "title": "Tag Requirement", "category": "SBAtlas" },
+      { "command": "sbatlas.confirmBulkAdd", "title": "Confirm Bulk Add", "category": "SBAtlas" }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -143,7 +148,28 @@
           "command": "sbatlas.removeTask",
           "when": "view == sbatlasProjectView && viewItem == taskItem",
           "group": "9_delete"
+        },
+        {
+          "command": "sbatlas.setRequirementPriority",
+          "when": "view == sbatlasProjectView && viewItem == requirementItem",
+          "group": "2_priority"
+        },
+        {
+          "command": "sbatlas.tagRequirement",
+          "when": "view == sbatlasProjectView && viewItem == requirementItem",
+          "group": "3_tags"
+        },
+        {
+          "command": "sbatlas.importRequirements",
+          "when": "view == sbatlasProjectView && viewItem == requirementsSection",
+          "group": "2_import"
+        },
+        {
+          "command": "sbatlas.bulkAddRequirements",
+          "when": "view == sbatlasProjectView && viewItem == requirementsSection",
+          "group": "2_import"
         }
+
       ]
     }
   },

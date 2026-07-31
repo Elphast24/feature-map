@@ -98,29 +98,55 @@ export class RequirementsSectionItem extends SBAtlasTreeItem {
 
 
 // Requirement item
-
-
 export class RequirementItem extends SBAtlasTreeItem {
   readonly contextValue = ContextValues.requirementItem;
   readonly requirement: Requirement;
 
   constructor(requirement: Requirement, index: number) {
-    const label = `${index + 1}. ${truncate(requirement.content, 55)}`;
+    const priorityIcon = RequirementItem.priorityIcon(
+      requirement.priority
+    );
+    const label = `${priorityIcon} ${index + 1}. ${truncate(requirement.content, 50)}`;
+
     super(label, vscode.TreeItemCollapsibleState.None);
 
     this.requirement = requirement;
+
+    // Show tags in description if they exist
+    const tagText =
+      requirement.tags.length > 0
+        ? requirement.tags.join(", ")
+        : "";
+
+    this.description = tagText;
+
     this.tooltip = new vscode.MarkdownString(
       `**Requirement ${index + 1}**\n\n` +
         `${requirement.content}\n\n` +
+        `Priority: ${requirement.priority}\n\n` +
         `Source: ${requirement.source}\n\n` +
+        (requirement.tags.length > 0
+          ? `Tags: ${requirement.tags.join(", ")}\n\n`
+          : "") +
         `Added: ${requirement.createdAt.toLocaleDateString()}`
     );
+
     this.iconPath = new vscode.ThemeIcon("circle-small-filled");
+
     this.command = {
       command: "sbatlas.editRequirement",
       title: "Edit Requirement",
       arguments: [requirement.id],
     };
+  }
+
+  private static priorityIcon(priority: string): string {
+    const icons: Record<string, string> = {
+      high: "🔴",
+      medium: "🟡",
+      low: "🟢",
+    };
+    return icons[priority] ?? "🟡";
   }
 }
 
