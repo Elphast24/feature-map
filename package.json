@@ -59,7 +59,13 @@
       { "command": "sbatlas.bulkAddRequirements", "title": "Bulk Add Requirements", "category": "SBAtlas" },
       { "command": "sbatlas.setRequirementPriority", "title": "Set Requirement Priority", "category": "SBAtlas" },
       { "command": "sbatlas.tagRequirement", "title": "Tag Requirement", "category": "SBAtlas" },
-      { "command": "sbatlas.confirmBulkAdd", "title": "Confirm Bulk Add", "category": "SBAtlas" }
+      { "command": "sbatlas.confirmBulkAdd", "title": "Confirm Bulk Add", "category": "SBAtlas" },
+      { "command": "sbatlas.moveTaskUp", "title": "Move Task Up", "category": "SBAtlas" },
+      { "command": "sbatlas.moveTaskDown", "title": "Move Task Down", "category": "SBAtlas" },
+      { "command": "sbatlas.moveTaskToModule", "title": "Move Task to Module", "category": "SBAtlas" },
+      { "command": "sbatlas.batchUpdateTasks", "title": "Batch Update Tasks", "category": "SBAtlas" },
+      { "command": "sbatlas.manageTaskDependencies", "title": "Manage Task Dependencies", "category": "SBAtlas" }
+
     ],
     "viewsContainers": {
       "activitybar": [
@@ -168,6 +174,26 @@
           "command": "sbatlas.bulkAddRequirements",
           "when": "view == sbatlasProjectView && viewItem == requirementsSection",
           "group": "2_import"
+        },
+        {
+          "command": "sbatlas.moveTaskUp",
+          "when": "view == sbatlasProjectView && viewItem == taskItem",
+          "group": "0_order@1"
+        },
+        {
+          "command": "sbatlas.moveTaskDown",
+          "when": "view == sbatlasProjectView && viewItem == taskItem",
+          "group": "0_order@2"
+        },
+        {
+          "command": "sbatlas.moveTaskToModule",
+          "when": "view == sbatlasProjectView && viewItem == taskItem",
+          "group": "0_order@3"
+        },
+        {
+          "command": "sbatlas.manageTaskDependencies",
+          "when": "view == sbatlasProjectView && viewItem == taskItem",
+          "group": "3_deps"
         }
 
       ]

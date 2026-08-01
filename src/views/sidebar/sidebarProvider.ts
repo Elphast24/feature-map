@@ -3,6 +3,8 @@ import { ProjectService } from "../../services/project/projectService";
 import { RoadmapService } from "../../services/roadmap/roadmapService";
 import { Project } from "../../models/project";
 import { Roadmap } from "../../models/roadMap";
+import { Module } from "../../models/module";
+import { Task } from "../../models/task";
 import {
   SBAtlasTreeItem,
   EmptyStateItem,
@@ -151,8 +153,8 @@ export class SidebarProvider
     return phase.modules.map((mod) => new ModuleItem(mod));
   }
 
-  private getModuleChildren(
-    module: import("../../models/module").Module
+ private getModuleChildren(
+    module: Module
   ): SBAtlasTreeItem[] {
     if (module.tasks.length === 0) {
       const placeholder = new MetadataItem(
@@ -163,7 +165,19 @@ export class SidebarProvider
       return [placeholder];
     }
 
-    return module.tasks.map((task) => new TaskItem(task));
+    // Build a task map for dependency resolution
+    const roadmap = this.roadmapService.getRoadmap();
+    const taskMap = new Map<string, Task>();
+
+    if (roadmap) {
+      roadmap.phases.forEach((p) =>
+        p.modules.forEach((m) =>
+          m.tasks.forEach((t) => taskMap.set(t.id, t))
+        )
+      );
+    }
+
+    return module.tasks.map((task) => new TaskItem(task, taskMap));
   }
 
   private getMetadataItems(project: Project): SBAtlasTreeItem[] {

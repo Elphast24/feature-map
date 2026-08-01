@@ -5,7 +5,6 @@ export enum TaskStatus {
   Skipped = "skipped",
 }
 
-
 export type TaskType =
   | "feature"
   | "bugfix"
@@ -22,27 +21,11 @@ export interface ITask {
   description: string;
   status: TaskStatus;
   type: TaskType;
-
-  /**
-   * IDs of the requirements this task addresses.
-   * One task can address multiple requirements.
-   * One requirement can generate multiple tasks.
-   */
   requirementIds: string[];
-
-  /**
-   * Estimated effort in abstract points.
-   * Not hours — relative complexity (1 = trivial, 5 = large).
-   * Optional: not every team uses estimates.
-   */
   estimatedEffort?: number;
-
-  /**
-   * Notes added by the developer during execution.
-   * Free-form text capturing decisions, blockers, or context.
-   */
   notes: string;
-
+  blockedBy: string[];
+  order: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,6 +39,8 @@ export class Task implements ITask {
   requirementIds: string[];
   estimatedEffort?: number;
   notes: string;
+  blockedBy: string[];
+  order: number;
   createdAt: Date;
   updatedAt: Date;
 
@@ -64,7 +49,8 @@ export class Task implements ITask {
     title: string,
     description: string = "",
     type: TaskType = "feature",
-    requirementIds: string[] = []
+    requirementIds: string[] = [],
+    order: number = 0
   ) {
     this.id = id;
     this.title = title;
@@ -73,26 +59,17 @@ export class Task implements ITask {
     this.type = type;
     this.requirementIds = requirementIds;
     this.notes = "";
+    this.blockedBy = [];
+    this.order = order;
     this.createdAt = new Date();
     this.updatedAt = new Date();
   }
 
-  // ─────────────────────────────────────────
-  // Status transitions
-  // ─────────────────────────────────────────
-
-  /**
-   * Advances the task to a new status and records the timestamp.
-   */
   updateStatus(status: TaskStatus): void {
     this.status = status;
     this.updatedAt = new Date();
   }
 
-  /**
-   * Appends a note to this task.
-   * Prepends a timestamp so notes beomes readable.
-   */
   addNote(note: string): void {
     const timestamp = new Date().toLocaleDateString(undefined, {
       year: "numeric",
@@ -109,9 +86,35 @@ export class Task implements ITask {
     this.updatedAt = new Date();
   }
 
-  // ─────────────────────────────────────────
-  // Computed properties
-  // ─────────────────────────────────────────
+   // Adds a dependency — this task is blocked by blockingTaskId.
+  addBlocker(blockingTaskId: string): void {
+    if (!this.blockedBy.includes(blockingTaskId)) {
+      this.blockedBy.push(blockingTaskId);
+      this.updatedAt = new Date();
+    }
+  }
+
+//   Removes a dependency.
+  removeBlocker(blockingTaskId: string): void {
+    const before = this.blockedBy.length;
+    this.blockedBy = this.blockedBy.filter(
+      (id) => id !== blockingTaskId
+    );
+    if (this.blockedBy.length < before) {
+      this.updatedAt = new Date();
+    }
+  }
+
+  isUnblocked(allTasks: Map<string, Task>): boolean {
+    if (this.blockedBy.length === 0) {
+      return true;
+    }
+
+    return this.blockedBy.every((blockerId) => {
+      const blocker = allTasks.get(blockerId);
+      return blocker ? blocker.isComplete : true;
+    });
+  }
 
   get isComplete(): boolean {
     return (
@@ -119,10 +122,6 @@ export class Task implements ITask {
       this.status === TaskStatus.Skipped
     );
   }
-
-  // ─────────────────────────────────────────
-  // Serialization
-  // ─────────────────────────────────────────
 
   toJSON(): Record<string, unknown> {
     return {
@@ -134,6 +133,8 @@ export class Task implements ITask {
       requirementIds: this.requirementIds,
       estimatedEffort: this.estimatedEffort,
       notes: this.notes,
+      blockedBy: this.blockedBy,
+      order: this.order,
       createdAt: this.createdAt.toISOString(),
       updatedAt: this.updatedAt.toISOString(),
     };
@@ -145,12 +146,16 @@ export class Task implements ITask {
       data.title as string,
       data.description as string,
       data.type as TaskType,
-      data.requirementIds as string[]
+      data.requirementIds as string[],
+      (data.order as number) ?? 0
     );
 
     task.status = data.status as TaskStatus;
-    task.estimatedEffort = data.estimatedEffort as number | undefined;
-    task.notes = data.notes as string;
+    task.estimatedEffort = data.estimatedEffort as
+      | number
+      | undefined;
+    task.notes = (data.notes as string) ?? "";
+    task.blockedBy = (data.blockedBy as string[]) ?? [];
     task.createdAt = new Date(data.createdAt as string);
     task.updatedAt = new Date(data.updatedAt as string);
 

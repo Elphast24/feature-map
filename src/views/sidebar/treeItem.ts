@@ -345,17 +345,27 @@ export class ModuleItem extends SBAtlasTreeItem {
 
 // Task item
 
-
 export class TaskItem extends SBAtlasTreeItem {
   readonly contextValue = ContextValues.taskItem;
   readonly task: Task;
 
-  constructor(task: Task) {
+  constructor(task: Task, allTasks: Map<string, Task>) {
     super(task.title, vscode.TreeItemCollapsibleState.None);
 
     this.task = task;
 
-    this.description = TaskItem.typeLabel(task.type);
+    const isBlocked =
+      task.blockedBy.length > 0 && !task.isUnblocked(allTasks);
+
+    this.description = [
+      isBlocked ? "⛔ blocked" : null,
+      task.blockedBy.length > 0 && !isBlocked
+        ? "🔓 unblocked"
+        : null,
+      TaskItem.typeLabel(task.type),
+    ]
+      .filter(Boolean)
+      .join("  ");
 
     this.tooltip = new vscode.MarkdownString(
       `**${task.title}**\n\n` +
@@ -365,19 +375,26 @@ export class TaskItem extends SBAtlasTreeItem {
         (task.estimatedEffort
           ? `Effort: ${task.estimatedEffort} points\n\n`
           : "") +
+        (isBlocked ? `⛔ **Blocked** — complete prerequisite tasks first.\n\n` : "") +
+        (task.blockedBy.length > 0
+          ? `Blockers: ${task.blockedBy.length} task(s)\n\n`
+          : "") +
         (task.notes ? `**Notes:**\n${task.notes}\n\n` : "") +
         (task.requirementIds.length > 0
-          ? `Requirement IDs: ${task.requirementIds.join(", ")}\n\n`
+          ? `Linked to ${task.requirementIds.length} requirement(s)\n\n`
           : "⚠ No requirement link\n\n") +
         `Updated: ${task.updatedAt.toLocaleDateString()}`
     );
 
     this.iconPath = new vscode.ThemeIcon(
-      TaskItem.statusThemeIcon(task.status),
-      TaskItem.statusColor(task.status)
+      isBlocked
+        ? "circle-slash"
+        : TaskItem.statusThemeIcon(task.status),
+      isBlocked
+        ? new vscode.ThemeColor("errorForeground")
+        : TaskItem.statusColor(task.status)
     );
 
-    // Clicking a task opens the status update flow
     this.command = {
       command: "sbatlas.updateTaskStatus",
       title: "Update Task Status",

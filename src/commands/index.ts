@@ -26,6 +26,10 @@ import { importRequirementsCommand } from "./importRequirements";
 import { bulkAddRequirementsCommand } from "./bulkAddRequirements";
 import { setRequirementPriorityCommand } from "./setRequirementPriority";
 import { tagRequirementCommand } from "./tagRequirement";
+import { moveTaskUpCommand, moveTaskDownCommand } from "./reorderTask";
+import { moveTaskToModuleCommand } from "./moveTaskToModule";
+import { batchUpdateTasksCommand } from "./batchUpdateTask";
+import { manageTaskDependenciesCommand } from "./manageTaskDependencies";
 
 function extractId(
   arg: unknown,
@@ -145,7 +149,36 @@ export function registerCommands(
           extractId(args[0], "requirement")
         ),
     ],
-    ["sbatlas.confirmBulkAdd", async () => {}]
+    ["sbatlas.confirmBulkAdd", async () => {}],
+
+    // Task Management
+    [
+      "sbatlas.moveTaskUp",
+      (...args) =>
+        moveTaskUpCommand(roadmapService, extractId(args[0], "task")),
+    ],
+    [
+      "sbatlas.moveTaskDown",
+      (...args) =>
+        moveTaskDownCommand(roadmapService, extractId(args[0], "task")),
+    ],
+    [
+      "sbatlas.moveTaskToModule",
+      (...args) =>
+        moveTaskToModuleCommand(
+          roadmapService,
+          extractId(args[0], "task")
+        ),
+    ],
+    ["sbatlas.batchUpdateTasks", () => batchUpdateTasksCommand(roadmapService)],
+    [
+      "sbatlas.manageTaskDependencies",
+      (...args) =>
+        manageTaskDependenciesCommand(
+          roadmapService,
+          extractId(args[0], "task")
+        ),
+    ],
   ];
 
   for (const [id, handler] of commands) {

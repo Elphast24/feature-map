@@ -47,8 +47,12 @@ export class Module implements IModule {
   // Task management
   // ─────────────────────────────────────────
 
-  addTask(task: Task): void {
+ addTask(task: Task): void {
+    if (task.order === 0 && this.tasks.length > 0) {
+      task.order = this.tasks.length;
+    }
     this.tasks.push(task);
+    this.tasks.sort((a, b) => a.order - b.order);
     this.recalculateStatus();
     this.updatedAt = new Date();
   }
@@ -59,6 +63,7 @@ export class Module implements IModule {
     const removed = this.tasks.length < before;
 
     if (removed) {
+      this.reassignOrders();
       this.recalculateStatus();
       this.updatedAt = new Date();
     }
@@ -68,6 +73,55 @@ export class Module implements IModule {
 
   findTask(taskId: string): Task | undefined {
     return this.tasks.find((t) => t.id === taskId);
+  }
+
+  /**
+   * Moves a task up one position (lower order value).
+   * Returns false if the task is already first.
+   */
+  moveTaskUp(taskId: string): boolean {
+    const index = this.tasks.findIndex((t) => t.id === taskId);
+    if (index <= 0) {
+      return false;
+    }
+
+    // Swap with the task above
+    const temp = this.tasks[index].order;
+    this.tasks[index].order = this.tasks[index - 1].order;
+    this.tasks[index - 1].order = temp;
+
+    this.tasks.sort((a, b) => a.order - b.order);
+    this.updatedAt = new Date();
+    return true;
+  }
+
+  /**
+   * Moves a task down one position (higher order value).
+   * Returns false if the task is already last.
+   */
+  moveTaskDown(taskId: string): boolean {
+    const index = this.tasks.findIndex((t) => t.id === taskId);
+    if (index === -1 || index >= this.tasks.length - 1) {
+      return false;
+    }
+
+    const temp = this.tasks[index].order;
+    this.tasks[index].order = this.tasks[index + 1].order;
+    this.tasks[index + 1].order = temp;
+
+    this.tasks.sort((a, b) => a.order - b.order);
+    this.updatedAt = new Date();
+    return true;
+  }
+
+  /**
+   * Reassigns order values to be contiguous (0, 1, 2...).
+   * Called after task removal to avoid gaps.
+   */
+  private reassignOrders(): void {
+    this.tasks.forEach((task, index) => {
+      task.order = index;
+    });
   }
 
   // ─────────────────────────────────────────
