@@ -30,6 +30,10 @@ import { moveTaskUpCommand, moveTaskDownCommand } from "./reorderTask";
 import { moveTaskToModuleCommand } from "./moveTaskToModule";
 import { batchUpdateTasksCommand } from "./batchUpdateTask";
 import { manageTaskDependenciesCommand } from "./manageTaskDependencies";
+import { searchCommand } from "./searchCommand";
+import { filterCommand } from "./filterCommand";
+import { SearchService } from "../services/search/searchService";
+import { SidebarProvider } from "../views/sidebar/sidebarProvider";
 
 function extractId(
   arg: unknown,
@@ -62,10 +66,12 @@ export function registerCommands(
   context: vscode.ExtensionContext,
   service: ProjectService,
   roadmapService: RoadmapService,
-  settingsService: SettingsService
+  settingsService: SettingsService,
+  sidebar: SidebarProvider
 ): void {
   const progressTracker = new ProgressTracker();
   const coverageTracker = new CoverageTracker();
+  const searchServiceInstance = new SearchService();
 
   const commands: [string, (...args: unknown[]) => Promise<void>][] = [
     // Project commands
@@ -178,6 +184,21 @@ export function registerCommands(
           roadmapService,
           extractId(args[0], "task")
         ),
+    ],
+    [
+      "sbatlas.search",
+      () => searchCommand(service, roadmapService, searchServiceInstance),
+    ],
+    [
+      "sbatlas.filter",
+      () => filterCommand(sidebar, service, roadmapService),
+    ],
+    [
+      "sbatlas.clearFilters",
+      async () => {
+        sidebar.clearFilters();
+        vscode.window.showInformationMessage("SBAtlas: Filters cleared.");
+      },
     ],
   ];
 

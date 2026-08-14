@@ -64,7 +64,10 @@
       { "command": "sbatlas.moveTaskDown", "title": "Move Task Down", "category": "SBAtlas" },
       { "command": "sbatlas.moveTaskToModule", "title": "Move Task to Module", "category": "SBAtlas" },
       { "command": "sbatlas.batchUpdateTasks", "title": "Batch Update Tasks", "category": "SBAtlas" },
-      { "command": "sbatlas.manageTaskDependencies", "title": "Manage Task Dependencies", "category": "SBAtlas" }
+      { "command": "sbatlas.manageTaskDependencies", "title": "Manage Task Dependencies", "category": "SBAtlas" },
+      { "command": "sbatlas.search", "title": "Search", "category": "SBAtlas" },
+      { "command": "sbatlas.filter", "title": "Filter", "category": "SBAtlas" },
+      { "command": "sbatlas.clearFilters", "title": "Clear Filters", "category": "SBAtlas" }
 
     ],
     "viewsContainers": {
@@ -95,6 +98,16 @@
         },
         {
           "command": "sbatlas.refresh",
+          "when": "view == sbatlasProjectView",
+          "group": "navigation"
+        },
+        {
+          "command": "sbatlas.search",
+          "when": "view == sbatlasProjectView",
+          "group": "navigation"
+        },
+        {
+          "command": "sbatlas.filter",
           "when": "view == sbatlasProjectView",
           "group": "navigation"
         }
@@ -195,8 +208,7 @@
           "when": "view == sbatlasProjectView && viewItem == taskItem",
           "group": "3_deps"
         }
-
-      ]
+    ]
     }
   },
   "scripts": {

@@ -256,7 +256,8 @@ export class ExtensionLifecycle {
       context,
       this.service,
       this.roadmapService,
-      this.settingsService
+      this.settingsService,
+      this.sidebar
     );
     console.log("[SBAtlas] Commands registered.");
   }

@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import { ProjectService } from "../../services/project/projectService";
 import { RoadmapService } from "../../services/roadmap/roadmapService";
+import { SearchService } from "../../services/search/searchService";
+import { SidebarFilters, emptyFilters, isFiltersEmpty } from "../../services/search/searchTypes";
 import { Project } from "../../models/project";
 import { Roadmap } from "../../models/roadMap";
-import { Module } from "../../models/module";
 import { Task } from "../../models/task";
 import {
   SBAtlasTreeItem,
@@ -29,6 +30,9 @@ export class SidebarProvider
 
   private readonly projectService: ProjectService;
   private readonly roadmapService: RoadmapService;
+  private readonly searchService: SearchService;
+
+  private filters: SidebarFilters = emptyFilters();
 
   constructor(
     projectService: ProjectService,
@@ -36,7 +40,26 @@ export class SidebarProvider
   ) {
     this.projectService = projectService;
     this.roadmapService = roadmapService;
+    this.searchService = new SearchService();
   }
+
+  // Filter management
+
+  setFilters(filters: SidebarFilters): void {
+    this.filters = filters;
+    this.refresh();
+  }
+
+  getFilters(): SidebarFilters {
+    return { ...this.filters };
+  }
+
+  clearFilters(): void {
+    this.filters = emptyFilters();
+    this.refresh();
+  }
+
+  // TreeDataProvider implementation
 
   getTreeItem(element: SBAtlasTreeItem): vscode.TreeItem {
     return element;
@@ -47,43 +70,36 @@ export class SidebarProvider
   ): vscode.ProviderResult<SBAtlasTreeItem[]> {
     const project = this.projectService.getProject();
     const roadmap = this.roadmapService.getRoadmap();
+    const hasFilters = !isFiltersEmpty(this.filters);
 
-    // Root level
     if (!element) {
-      return this.getRootItems(project);
+      return this.getRootItems(project, hasFilters);
     }
 
-    // Project root children
     if (element instanceof ProjectRootItem && project) {
-      return this.getProjectChildren(project, roadmap);
+      return this.getProjectChildren(project, roadmap, hasFilters);
     }
 
-    // Requirements section children
     if (element instanceof RequirementsSectionItem && project) {
       return this.getRequirementItems(project);
     }
 
-    // Roadmap section children 
     if (element instanceof RoadmapSectionItem) {
       return this.getRoadmapChildren(roadmap);
     }
 
-    // Phase children
     if (element instanceof PhaseItem) {
       return this.getPhaseChildren(element.phase);
     }
 
-    // Module children
     if (element instanceof ModuleItem) {
       return this.getModuleChildren(element.module);
     }
 
-    // Metadata section children 
     if (element instanceof MetadataSectionItem && project) {
       return this.getMetadataItems(project);
     }
 
-    // Leaf nodes have no children
     return [];
   }
 
@@ -91,30 +107,63 @@ export class SidebarProvider
     this._onDidChangeTreeData.fire();
   }
 
-  //────────────────────
   // Private tree builders
-  //────────────────────
-
-  private getRootItems(project: Project | null): SBAtlasTreeItem[] {
+  private getRootItems(
+    project: Project | null,
+    hasFilters: boolean
+  ): SBAtlasTreeItem[] {
     if (!project) {
       return [new EmptyStateItem()];
     }
-    return [new ProjectRootItem(project)];
+
+    const items: SBAtlasTreeItem[] = [new ProjectRootItem(project)];
+
+    // Show filter indicator at root level
+    if (hasFilters) {
+      const filterDesc = this.searchService.describeFilters(
+        this.filters
+      );
+      const filterItem = new MetadataItem("🔍 " + filterDesc, "Clear: SBAtlas: Filter → Clear All");
+      items.push(filterItem);
+    }
+
+    return items;
   }
 
   private getProjectChildren(
     project: Project,
-    roadmap: Roadmap | null
+    roadmap: Roadmap | null,
+    hasFilters: boolean
   ): SBAtlasTreeItem[] {
+    // Get filtered requirement count
+    const filteredReqs = this.searchService.filterRequirements(
+      project.requirements,
+      this.filters
+    );
+
     return [
-      new RequirementsSectionItem(project.requirementCount()),
+      new RequirementsSectionItem(filteredReqs.length),
       new RoadmapSectionItem(roadmap),
       new MetadataSectionItem(),
     ];
   }
 
   private getRequirementItems(project: Project): SBAtlasTreeItem[] {
-    if (project.requirements.length === 0) {
+    const filtered = this.searchService.filterRequirements(
+      project.requirements,
+      this.filters
+    );
+
+    if (filtered.length === 0) {
+      if (!isFiltersEmpty(this.filters)) {
+        const placeholder = new MetadataItem(
+          "No matching requirements",
+          "Clear filters to show all"
+        );
+        placeholder.iconPath = new vscode.ThemeIcon("info");
+        return [placeholder];
+      }
+
       const placeholder = new MetadataItem(
         "No requirements yet",
         "Right-click to add"
@@ -123,7 +172,7 @@ export class SidebarProvider
       return [placeholder];
     }
 
-    return project.requirements.map(
+    return filtered.map(
       (req, index) => new RequirementItem(req, index)
     );
   }
@@ -135,7 +184,26 @@ export class SidebarProvider
       return [new RoadmapEmptyItem()];
     }
 
-    return roadmap.phases.map((phase) => new PhaseItem(phase));
+    // Filter phases
+    const visiblePhases = roadmap.phases.filter((phase) => {
+      const phaseTasks = phase.modules.flatMap((m) => m.tasks);
+      return this.searchService.shouldShowPhase(
+        phase.id,
+        phaseTasks,
+        this.filters
+      );
+    });
+
+    if (visiblePhases.length === 0 && !isFiltersEmpty(this.filters)) {
+      const placeholder = new MetadataItem(
+        "No matching phases",
+        "Clear filters to show all"
+      );
+      placeholder.iconPath = new vscode.ThemeIcon("info");
+      return [placeholder];
+    }
+
+    return visiblePhases.map((phase) => new PhaseItem(phase));
   }
 
   private getPhaseChildren(
@@ -150,22 +218,34 @@ export class SidebarProvider
       return [placeholder];
     }
 
-    return phase.modules.map((mod) => new ModuleItem(mod));
-  }
+    // Filter modules — show only modules with matching tasks
+    const visibleModules = phase.modules.filter((mod) => {
+      if (isFiltersEmpty(this.filters)) {
+        return true;
+      }
+      const filteredTasks = this.searchService.filterTasks(
+        mod.tasks,
+        this.filters
+      );
+      return filteredTasks.length > 0;
+    });
 
- private getModuleChildren(
-    module: Module
-  ): SBAtlasTreeItem[] {
-    if (module.tasks.length === 0) {
+    if (visibleModules.length === 0) {
       const placeholder = new MetadataItem(
-        "No tasks in this module",
-        "Right-click to add"
+        "No matching modules",
+        "Clear filters to show all"
       );
       placeholder.iconPath = new vscode.ThemeIcon("info");
       return [placeholder];
     }
 
-    // Build a task map for dependency resolution
+    return visibleModules.map((mod) => new ModuleItem(mod));
+  }
+
+  private getModuleChildren(
+    module: import("../../models/module").Module
+  ): SBAtlasTreeItem[] {
+    // Build task map for dependency resolution
     const roadmap = this.roadmapService.getRoadmap();
     const taskMap = new Map<string, Task>();
 
@@ -177,7 +257,31 @@ export class SidebarProvider
       );
     }
 
-    return module.tasks.map((task) => new TaskItem(task, taskMap));
+    // Filter tasks
+    const filteredTasks = this.searchService.filterTasks(
+      module.tasks,
+      this.filters
+    );
+
+    if (filteredTasks.length === 0) {
+      if (!isFiltersEmpty(this.filters)) {
+        const placeholder = new MetadataItem(
+          "No matching tasks",
+          "Clear filters to show all"
+        );
+        placeholder.iconPath = new vscode.ThemeIcon("info");
+        return [placeholder];
+      }
+
+      const placeholder = new MetadataItem(
+        "No tasks in this module",
+        "Right-click to add"
+      );
+      placeholder.iconPath = new vscode.ThemeIcon("info");
+      return [placeholder];
+    }
+
+    return filteredTasks.map((task) => new TaskItem(task, taskMap));
   }
 
   private getMetadataItems(project: Project): SBAtlasTreeItem[] {
