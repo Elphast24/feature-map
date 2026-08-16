@@ -67,7 +67,9 @@
       { "command": "sbatlas.manageTaskDependencies", "title": "Manage Task Dependencies", "category": "SBAtlas" },
       { "command": "sbatlas.search", "title": "Search", "category": "SBAtlas" },
       { "command": "sbatlas.filter", "title": "Filter", "category": "SBAtlas" },
-      { "command": "sbatlas.clearFilters", "title": "Clear Filters", "category": "SBAtlas" }
+      { "command": "sbatlas.clearFilters", "title": "Clear Filters", "category": "SBAtlas" },
+      { "command": "sbatlas.export", "title": "Export", "category": "SBAtlas" },
+      { "command": "sbatlas.copyProgress", "title": "Copy Progress to Clipboard", "category": "SBAtlas" }
 
     ],
     "viewsContainers": {
@@ -207,6 +209,11 @@
           "command": "sbatlas.manageTaskDependencies",
           "when": "view == sbatlasProjectView && viewItem == taskItem",
           "group": "3_deps"
+        },
+        {
+          "command": "sbatlas.export",
+          "when": "view == sbatlasProjectView && viewItem == projectRoot",
+          "group": "5_export"
         }
     ]
     }

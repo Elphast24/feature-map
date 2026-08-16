@@ -34,6 +34,9 @@ import { searchCommand } from "./searchCommand";
 import { filterCommand } from "./filterCommand";
 import { SearchService } from "../services/search/searchService";
 import { SidebarProvider } from "../views/sidebar/sidebarProvider";
+import { ExportService } from "../services/export/exportService";
+import { exportCommand } from "./exportCommand";
+import { copyProgressCommand } from "./copyProgressCommand";
 
 function extractId(
   arg: unknown,
@@ -72,6 +75,8 @@ export function registerCommands(
   const progressTracker = new ProgressTracker();
   const coverageTracker = new CoverageTracker();
   const searchServiceInstance = new SearchService();
+  const exportService = new ExportService();
+  
 
   const commands: [string, (...args: unknown[]) => Promise<void>][] = [
     // Project commands
@@ -93,6 +98,16 @@ export function registerCommands(
     // Roadmap commands
     ["sbatlas.generateRoadmap", () => generateRoadmapCommand(roadmapService)],
     ["sbatlas.deleteRoadmap", () => deleteRoadmapCommand(roadmapService)],
+
+    // Export commands
+    [
+      "sbatlas.export",
+      () => exportCommand(service, roadmapService, exportService),
+    ],
+    [
+      "sbatlas.copyProgress",
+      () => copyProgressCommand(service, roadmapService, exportService),
+    ],
     [
       "sbatlas.addTask",
       (...args) =>
