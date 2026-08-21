@@ -2,8 +2,14 @@ import * as vscode from "vscode";
 import { ProjectService } from "../services/project/projectService";
 import { RoadmapService } from "../services/roadmap/roadmapService";
 import { SettingsService } from "../services/settings/settingsService";
+import { ReportService } from "../services/report/reportService";
+import { ExportService } from "../services/export/exportService";
 import { ProgressTracker } from "../services/progress/progressTracker";
 import { CoverageTracker } from "../services/coverage/coverageTracker";
+import { SearchService } from "../services/search/searchService";
+import { SidebarProvider } from "../views/sidebar/sidebarProvider";
+
+// Commands
 import { createProjectCommand } from "./createProject";
 import { deleteProjectCommand } from "./deleteProject";
 import { switchProjectCommand } from "./switchProject";
@@ -32,36 +38,19 @@ import { batchUpdateTasksCommand } from "./batchUpdateTask";
 import { manageTaskDependenciesCommand } from "./manageTaskDependencies";
 import { searchCommand } from "./searchCommand";
 import { filterCommand } from "./filterCommand";
-import { SearchService } from "../services/search/searchService";
-import { SidebarProvider } from "../views/sidebar/sidebarProvider";
-import { ExportService } from "../services/export/exportService";
 import { exportCommand } from "./exportCommand";
 import { copyProgressCommand } from "./copyProgressCommand";
+import { generateReportCommand } from "./generateReport";
 
-function extractId(
-  arg: unknown,
-  property: string
-): string | undefined {
-  if (!arg) {
-    return undefined;
-  }
-  if (
-    typeof arg === "object" &&
-    arg !== null &&
-    property in arg
-  ) {
+function extractId(arg: unknown, property: string): string | undefined {
+  if (!arg) {return undefined};
+  if (typeof arg === "object" && arg !== null && property in arg) {
     const domainObject = (arg as Record<string, unknown>)[property];
-    if (
-      typeof domainObject === "object" &&
-      domainObject !== null &&
-      "id" in domainObject
-    ) {
+    if (typeof domainObject === "object" && domainObject !== null && "id" in domainObject) {
       return (domainObject as { id: string }).id;
     }
   }
-  if (typeof arg === "string") {
-    return arg;
-  }
+  if (typeof arg === "string") {return arg;}
   return undefined;
 }
 
@@ -70,151 +59,58 @@ export function registerCommands(
   service: ProjectService,
   roadmapService: RoadmapService,
   settingsService: SettingsService,
-  sidebar: SidebarProvider
+  sidebar: SidebarProvider,
+  reportService: ReportService,
+  workspaceRoot: vscode.Uri | null
 ): void {
   const progressTracker = new ProgressTracker();
   const coverageTracker = new CoverageTracker();
-  const searchServiceInstance = new SearchService();
+  const searchService = new SearchService();
   const exportService = new ExportService();
-  
 
   const commands: [string, (...args: unknown[]) => Promise<void>][] = [
-    // Project commands
+    // Project Lifecycle
     ["sbatlas.createProject", () => createProjectCommand(service, settingsService)],
     ["sbatlas.deleteProject", () => deleteProjectCommand(service)],
     ["sbatlas.switchProject", () => switchProjectCommand(service, roadmapService)],
     ["sbatlas.listProjects", () => listProjectsCommand(service)],
-    ["sbatlas.pasteRequirement", () => pasteRequirementCommand(service)],
-    [
-      "sbatlas.editRequirement",
-      (...args) =>
-        editRequirementCommand(
-          service,
-          extractId(args[0], "requirement")
-        ),
-    ],
     ["sbatlas.refresh", () => refreshCommand(service, roadmapService)],
 
-    // Roadmap commands
-    ["sbatlas.generateRoadmap", () => generateRoadmapCommand(roadmapService)],
-    ["sbatlas.deleteRoadmap", () => deleteRoadmapCommand(roadmapService)],
-
-    // Export commands
-    [
-      "sbatlas.export",
-      () => exportCommand(service, roadmapService, exportService),
-    ],
-    [
-      "sbatlas.copyProgress",
-      () => copyProgressCommand(service, roadmapService, exportService),
-    ],
-    [
-      "sbatlas.addTask",
-      (...args) =>
-        addTaskCommand(
-          roadmapService,
-          service,
-          extractId(args[0], "module")
-        ),
-    ],
-    [
-      "sbatlas.removeTask",
-      (...args) =>
-        removeTaskCommand(
-          roadmapService,
-          extractId(args[0], "task")
-        ),
-    ],
-    [
-      "sbatlas.updateTaskStatus",
-      (...args) =>
-        updateTaskStatusCommand(
-          roadmapService,
-          extractId(args[0], "task")
-        ),
-    ],
-    [
-      "sbatlas.addTaskNote",
-      (...args) =>
-        addTaskNoteCommand(
-          roadmapService,
-          extractId(args[0], "task")
-        ),
-    ],
-    ["sbatlas.nextTask", () => nextTaskCommand(roadmapService, progressTracker)],
-
-    // Reports
-    ["sbatlas.showProgress", () => showProgressCommand(roadmapService, progressTracker)],
-    ["sbatlas.showCoverage", () => showCoverageCommand(service, roadmapService, coverageTracker)],
-
-    // Settings
-    ["sbatlas.openSettings", () => openSettingsCommand(settingsService)],
-    ["sbatlas.selectModel", () => selectModelCommand()],
-
-    // Requirement Import
+    // Requirements Intake
+    ["sbatlas.pasteRequirement", () => pasteRequirementCommand(service)],
+    ["sbatlas.editRequirement", (...args) => editRequirementCommand(service, extractId(args[0], "requirement"))],
     ["sbatlas.importRequirements", () => importRequirementsCommand(service)],
     ["sbatlas.bulkAddRequirements", () => bulkAddRequirementsCommand(service)],
-    [
-      "sbatlas.setRequirementPriority",
-      (...args) =>
-        setRequirementPriorityCommand(
-          service,
-          extractId(args[0], "requirement")
-        ),
-    ],
-    [
-      "sbatlas.tagRequirement",
-      (...args) =>
-        tagRequirementCommand(
-          service,
-          extractId(args[0], "requirement")
-        ),
-    ],
-    ["sbatlas.confirmBulkAdd", async () => {}],
+    ["sbatlas.setRequirementPriority", (...args) => setRequirementPriorityCommand(service, extractId(args[0], "requirement"))],
+    ["sbatlas.tagRequirement", (...args) => tagRequirementCommand(service, extractId(args[0], "requirement"))],
 
-    // Task Management
-    [
-      "sbatlas.moveTaskUp",
-      (...args) =>
-        moveTaskUpCommand(roadmapService, extractId(args[0], "task")),
-    ],
-    [
-      "sbatlas.moveTaskDown",
-      (...args) =>
-        moveTaskDownCommand(roadmapService, extractId(args[0], "task")),
-    ],
-    [
-      "sbatlas.moveTaskToModule",
-      (...args) =>
-        moveTaskToModuleCommand(
-          roadmapService,
-          extractId(args[0], "task")
-        ),
-    ],
+    // Roadmap Generation & Tasks
+    ["sbatlas.generateRoadmap", () => generateRoadmapCommand(roadmapService)],
+    ["sbatlas.deleteRoadmap", () => deleteRoadmapCommand(roadmapService)],
+    ["sbatlas.addTask", (...args) => addTaskCommand(roadmapService, service, extractId(args[0], "module"))],
+    ["sbatlas.removeTask", (...args) => removeTaskCommand(roadmapService, extractId(args[0], "task"))],
+    ["sbatlas.moveTaskUp", (...args) => moveTaskUpCommand(roadmapService, extractId(args[0], "task"))],
+    ["sbatlas.moveTaskDown", (...args) => moveTaskDownCommand(roadmapService, extractId(args[0], "task"))],
+    ["sbatlas.moveTaskToModule", (...args) => moveTaskToModuleCommand(roadmapService, extractId(args[0], "task"))],
+    ["sbatlas.updateTaskStatus", (...args) => updateTaskStatusCommand(roadmapService, extractId(args[0], "task"))],
     ["sbatlas.batchUpdateTasks", () => batchUpdateTasksCommand(roadmapService)],
-    [
-      "sbatlas.manageTaskDependencies",
-      (...args) =>
-        manageTaskDependenciesCommand(
-          roadmapService,
-          extractId(args[0], "task")
-        ),
-    ],
-    [
-      "sbatlas.search",
-      () => searchCommand(service, roadmapService, searchServiceInstance),
-    ],
-    [
-      "sbatlas.filter",
-      () => filterCommand(sidebar, service, roadmapService),
-    ],
-    [
-      "sbatlas.clearFilters",
-      async () => {
-        sidebar.clearFilters();
-        vscode.window.showInformationMessage("SBAtlas: Filters cleared.");
-      },
-    ],
+    ["sbatlas.addTaskNote", (...args) => addTaskNoteCommand(roadmapService, extractId(args[0], "task"))],
+    ["sbatlas.manageTaskDependencies", (...args) => manageTaskDependenciesCommand(roadmapService, extractId(args[0], "task"))],
+    ["sbatlas.nextTask", () => nextTaskCommand(roadmapService, progressTracker)],
+
+    // Reporting & Export
+    ["sbatlas.showProgress", () => showProgressCommand(roadmapService, progressTracker)],
+    ["sbatlas.showCoverage", () => showCoverageCommand(service, roadmapService, coverageTracker)],
+    ["sbatlas.generateReport", () => generateReportCommand(service, roadmapService, reportService, workspaceRoot)],
+    ["sbatlas.export", () => exportCommand(service, roadmapService, exportService)],
+    ["sbatlas.copyProgress", () => copyProgressCommand(service, roadmapService, exportService)],
+
+    // Navigation & Settings
+    ["sbatlas.search", () => searchCommand(service, roadmapService, searchService)],
+    ["sbatlas.filter", () => filterCommand(sidebar, service, roadmapService)],
+    ["sbatlas.clearFilters", async () => { sidebar.clearFilters(); vscode.window.showInformationMessage("SBAtlas: Filters cleared."); }],
+    ["sbatlas.openSettings", () => openSettingsCommand(settingsService)],
+    ["sbatlas.selectModel", () => selectModelCommand()],
   ];
 
   for (const [id, handler] of commands) {

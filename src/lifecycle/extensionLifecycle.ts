@@ -11,6 +11,7 @@ import { registerCommands } from "../commands/index";
 import { createAIConfigReader } from "../services/analysis/readAIConfig";
 import { AnalysisService } from "../services/analysis/analysisService";
 import { RoadmapService } from "../services/roadmap/roadmapService";
+import { ReportService } from "../services/report/reportService";
 
 export class ExtensionLifecycle {
   private storage!: FileStorage;
@@ -22,6 +23,7 @@ export class ExtensionLifecycle {
   private sidebar!: SidebarProvider;
   private statusBar!: SBAtlasStatusBarItem;
   private treeView!: vscode.TreeView<vscode.TreeItem>;
+  private reportService!: ReportService;
 
   async activate(context: vscode.ExtensionContext): Promise<void> {
     console.log("[SBAtlas] Activating...");
@@ -92,10 +94,15 @@ export class ExtensionLifecycle {
       this.service
     );
 
+    this.reportService = new ReportService(
+      createAIConfigReader(this.settingsService)
+      );
+
     console.log("[SBAtlas] Services built.");
     console.log(
       `[SBAtlas] Storage: ${this.storage.getStorageDir().fsPath}`
     );
+  
   }
 
   private async runMigration(
@@ -249,6 +256,7 @@ export class ExtensionLifecycle {
     console.log("[SBAtlas] Events wired.");
   }
 
+  // In registerCommandsAndDisposables():
   private registerCommandsAndDisposables(
     context: vscode.ExtensionContext
   ): void {
@@ -257,7 +265,9 @@ export class ExtensionLifecycle {
       this.service,
       this.roadmapService,
       this.settingsService,
-      this.sidebar
+      this.sidebar,
+      this.reportService,
+      this.getWorkspaceRoot()
     );
     console.log("[SBAtlas] Commands registered.");
   }

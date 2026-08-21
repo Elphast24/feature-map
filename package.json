@@ -69,7 +69,8 @@
       { "command": "sbatlas.filter", "title": "Filter", "category": "SBAtlas" },
       { "command": "sbatlas.clearFilters", "title": "Clear Filters", "category": "SBAtlas" },
       { "command": "sbatlas.export", "title": "Export", "category": "SBAtlas" },
-      { "command": "sbatlas.copyProgress", "title": "Copy Progress to Clipboard", "category": "SBAtlas" }
+      { "command": "sbatlas.copyProgress", "title": "Copy Progress to Clipboard", "category": "SBAtlas" },
+       { "command": "sbatlas.generateReport", "title": "Generate Project Report", "category": "SBAtlas" }
 
     ],
     "viewsContainers": {
@@ -112,6 +113,11 @@
           "command": "sbatlas.filter",
           "when": "view == sbatlasProjectView",
           "group": "navigation"
+        },
+         {
+          "command": "sbatlas.generateReport",
+          "when": "view == sbatlasProjectView",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -214,6 +220,11 @@
           "command": "sbatlas.export",
           "when": "view == sbatlasProjectView && viewItem == projectRoot",
           "group": "5_export"
+        },
+        {
+          "command": "sbatlas.generateReport",
+          "when": "view == sbatlasProjectView && viewItem == projectRoot",
+          "group": "4_report"
         }
     ]
     }
